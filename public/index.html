@@ -859,9 +859,17 @@ function addAiBooks(excludeTitles){
 /* ---------- 从家长的话里识别要移除的书名 ---------- */
 function extractRemoveTargets(text){
   const targets = [];
+  const particles = ['了','的','得','吧','吗','呢','啊','呀','哦','嘛','着','过'];
+  const clean = (s) => {
+    if(!s) return '';
+    let v = s.replace(/《|》/g,'').trim();
+    v = v.replace(/^[把请帮麻烦]+/,'');
+    v = v.replace(/[，,。!?？！\s]+$/,'');
+    v = v.replace(/[了的得吧吗呢啊呀哦嘛着过]+$/,'');
+    return v;
+  };
   const push = (s) => {
-    if(!s) return;
-    const v = s.replace(/《|》/g,'').trim();
+    const v = clean(s);
     if(v && !targets.includes(v)) targets.push(v);
   };
   let m;
@@ -874,9 +882,12 @@ function extractRemoveTargets(text){
   // 《X》不要 / 《X》去掉
   const re3 = /《([^》]+)》(?:不要|去掉|移除|删除|删掉)/g;
   while((m = re3.exec(text))) push(m[1]);
-  // 不要 X / X 不要了
-  const re4 = /(?:不要|去掉|移除|删除|删掉)\s*([^，,。!?？！\s]{1,20})/g;
+  // X 不要了 / X 去掉了
+  const re4 = /([^，,。!?？！\s]{1,20})\s*(?:不要|去掉|移除|删除|删掉)(?:了|吧|吗|呢|啊|呀)?/g;
   while((m = re4.exec(text))) push(m[1]);
+  // 不要 X
+  const re5 = /不要\s*(《[^》]+》|[^，,。!?？！\s]{1,20})/g;
+  while((m = re5.exec(text))) push(m[1]);
   return targets;
 }
 
