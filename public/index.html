@@ -571,7 +571,7 @@ SCRENS.profile = ()=>`
     <div class="msg user"><div class="who">家长 · 语音</div>希望阅读和口语加强，数学保持就好。<div class="voice-hint">第 3 步 · 培养期望</div></div>
     <div class="msg ai"><div class="who">小满 · AI 助手</div>好嘞，子涵的档案已整理 ✅<br>接下来我会给出 <b>阅读 / 计算 / 口语陪练 / 其他</b> 四个学习方向，你确认后我就生成每日计划。</div>
   </div>
-  <button class="btn" style="margin:14px 16px 0" onclick="gotoDirections()">下一步 · 查看学习方向 →</button>
+  <button class="btn" style="margin:14px 16px 0" id="nextBtn" onclick="gotoDirections()">下一步 · 查看学习方向 →</button>
   <div class="inputbar">
     <button class="mic" onclick="toggleMic(this)"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
     <input class="textbox" placeholder="或文字补充…">
@@ -677,7 +677,15 @@ function refreshBooks(){
 }
 
 /* ---------- 大模型结果驱动下游页面 ---------- */
-function gotoDirections(){
+async function gotoDirections(){
+  // 先发送输入框里还没发出去的文字，等 AI 回复完再跳转
+  const ti = document.querySelector('#screenBody .textbox');
+  if(ti && ti.value.trim() && !streaming){
+    const btn = document.getElementById('nextBtn');
+    if(btn){ btn.textContent = 'AI 正在生成…'; btn.disabled = true; }
+    await sendText(ti);
+    if(btn){ btn.textContent = '下一步 · 查看学习方向 →'; btn.disabled = false; }
+  }
   aiPlan = lastAiReply;
   goto('directions');
 }
@@ -837,17 +845,21 @@ SCRENS.status = ()=>`
     </div>
   </div>
   <button class="btn mint" style="margin-top:14px" onclick="goto('home')">查看今日计划 →</button>
-  <button class="btn ghost" style="margin-top:10px" onclick="goto('directions')">生成明日学习计划</button>
+  <button class="btn ghost" style="margin-top:10px" onclick="gotoDirections()">生成明日学习计划</button>
 </div>`;
 
 SCRENS.directions = ()=>`
 <div class="wrap fade">
-  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>AI 学习方向</h2><span class="tag mint">已生成</span></div>
-  <div class="hero"><h3>子涵 · 每日计划候选</h3><p>基于年龄、兴趣与培养期望，AI 给出四个方向。计划安排在放学后 17:30-21:30，预留晚饭、休息与睡前洗漱时间。</p></div>
-  ${aiPlan ? `<div class="card" style="background:linear-gradient(135deg,#E8F5E9,#FFF8E1);border-color:#C8E6C9;margin-bottom:12px">
-    <div style="font-weight:800;font-size:13px;color:#2E7D32">🤖 AI 刚生成的学习计划</div>
-    <div style="font-size:13px;line-height:1.65;color:var(--ink);margin-top:6px;white-space:pre-wrap">${aiPlan}</div>
-  </div>` : ''}
+  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>AI 学习方向</h2><span class="tag ${aiPlan?'mint':'amber'}">${aiPlan?'AI 生成':'示例'}</span></div>
+  ${aiPlan ? `
+    <div class="card" style="background:linear-gradient(135deg,#E8F5E9,#FFF8E1);border-color:#C8E6C9">
+      <div style="font-weight:800;font-size:13px;color:#2E7D32">🤖 小满刚生成的学习计划</div>
+      <div style="font-size:13px;line-height:1.7;color:var(--ink);margin-top:8px;white-space:pre-wrap">${aiPlan}</div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin:16px 0 8px">快捷入口 · 点击可查看或操作</div>
+  ` : `
+    <div class="hero"><h3>子涵 · 每日计划候选</h3><p>基于年龄、兴趣与培养期望，AI 给出四个方向。计划安排在放学后 17:30-21:30，预留晚饭、休息与睡前洗漱时间。</p></div>
+  `}
   <div class="dir-card">
     <div class="icon mint">📖</div>
     <div class="body">
