@@ -1070,23 +1070,83 @@ SCRENS.bookDetail = ()=>{
   </div>`;
 };
 
+/* ---------- 根据 AI 计划动态生成今日计划时间轴 ---------- */
+function getPlanData(){
+  const text = aiPlan || '';
+  const num = (re) => {
+    const m = text.match(re);
+    return m ? parseInt(m[1], 10) : null;
+  };
+  const reading = num(/阅读[^\d]{0,12}(\d{1,2})\s*分钟/) || 25;
+  const calc = num(/(?:计算|数学|口算)[^\d]{0,12}(\d{1,2})\s*分钟/) || 15;
+  const oral = num(/(?:口语|英语|陪练)[^\d]{0,12}(\d{1,2})\s*分钟/) || 15;
+  const other = num(/(?:其他|兴趣|钢琴|围棋|打卡|习惯)[^\d]{0,12}(\d{1,2})\s*分钟/) || 30;
+  const bookMatch = text.match(/《([^》]+)》/);
+  const book = bookMatch ? '《' + bookMatch[1].trim() + '》' : '《神奇校车·水的故事》';
+  return { reading, calc, oral, other, book };
+}
+
+function fmtClock(min){
+  const h = Math.floor(min/60), m = min%60;
+  return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+}
+
+function planTasks(){
+  const p = getPlanData();
+  const text = aiPlan || '';
+  const has = (kw) => text.includes(kw);
+  const defs = [
+    { kw:['阅读','书单','书籍'], icon:'📖', name:`阅读 · ${p.book}`, desc:`查看兴趣书单 · ${p.reading} 分钟`, onclick:`push('reading')`, min:p.reading, arrow:true },
+    { kw:['计算','数学','口算'], icon:'🔢', name:`计算 · 口算 ${Math.round(p.calc*1.3)} 题`, desc:`校内同步 · ${p.calc} 分钟`, onclick:`toggleTask(this)`, min:p.calc },
+    { kw:['口语','英语','陪练'], icon:'🎧', name:'口语陪练 · 先听后说', desc:`听 ${Math.round(p.oral*2/3)} 分钟 + 对练 ${Math.round(p.oral/3)} 分钟`, onclick:`toggleTask(this)`, min:p.oral },
+    { kw:['其他','兴趣','钢琴','围棋','习惯'], icon:'🎹', name:'兴趣打卡 · 钢琴 / 围棋', desc:`每日坚持 · ${p.other} 分钟`, onclick:`toggleTask(this)`, min:p.other }
+  ];
+  const list = aiPlan ? defs.filter(d => d.kw.some(k => has(k))) : defs;
+  return list.map(d => Object.assign({}, d));
+}
+
+function homeTimelineHtml(){
+  const tasks = planTasks();
+  const items = [];
+  const fixed = [
+    { min: 17*60+30, dur:15, icon:'🛋️', name:'放学回家 · 休息', desc:'放松一会儿再开始', cls:'life' },
+    { min: 17*60+45, dur:30, icon:'🍚', name:'晚饭时间', desc:'全家一起用餐', cls:'life' },
+    { min: 18*60+15, dur:15, icon:'🧘', name:'餐后休息', desc:'收拾桌面、准备学习', cls:'life' }
+  ];
+  for(const f of fixed){
+    items.push({ icon:f.icon, name:f.name, desc:f.desc, cls:f.cls, time:`${fmtClock(f.min)}-${fmtClock(f.min+f.dur)}` });
+  }
+  let t = 18*60+30;
+  tasks.forEach((task, i) => {
+    const end = t + task.min;
+    items.push({ icon:task.icon, name:task.name, desc:task.desc, cls:'study', onclick:task.onclick, arrow:task.arrow, time:`${fmtClock(t)}-${fmtClock(end)}` });
+    t = end;
+    if(i < tasks.length - 1){
+      items.push({ icon:'🧘', name:'眼睛休息', desc:'远眺 · 活动一下', cls:'life', time:`${fmtClock(t)}-${fmtClock(t+10)}` });
+      t += 10;
+    }
+  });
+  if(t < 21*60){
+    items.push({ icon:'🍎', name:'吃点心 · 休息', desc:'补充能量', cls:'life', time:`${fmtClock(t)}-${fmtClock(t+10)}` });
+    t += 10;
+  }
+  if(t < 21*60){
+    items.push({ icon:'🎈', name:'亲子 / 自由时间', desc:'聊天、游戏或自由安排', cls:'life', time:`${fmtClock(t)}-${fmtClock(21*60)}` });
+    t = 21*60;
+  }
+  items.push({ icon:'🛁', name:'睡前洗漱', desc:'准备睡觉 · 早睡早起', cls:'life', time:'21:00-21:30' });
+  return items.map(it => {
+    const right = it.cls === 'study' ? (it.arrow ? '<div style="color:var(--muted);font-size:18px">›</div>' : '<div class="ck">✓</div>') : '';
+    const onclick = it.cls === 'study' ? `onclick="${it.onclick}"` : '';
+    return `<div class="tl-item ${it.cls}" ${onclick}><span class="tl-time">${it.time}</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">${it.icon}</div><div style="flex:1"><div class="nm">${it.name}</div><div class="ds">${it.desc}</div></div>${right}</div></div>`;
+  }).join('');
+}
+
 SCRENS.home = ()=>`
 <div class="wrap fade">
   <div class="head"><h2>今日计划</h2><span class="tag mint">进行中</span></div>
   <div class="hero"><h3>子涵的今晚 · 17:30-21:30</h3><p>放学后到睡前 · 预留晚饭、休息与洗漱时间</p><div class="prog" style="margin-top:10px"><i style="width:33%"></i></div></div>
-  <div class="tl">
-    <div class="tl-item life"><span class="tl-time">17:30-17:45</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🛋️</div><div style="flex:1"><div class="nm">放学回家 · 休息</div><div class="ds">放松一会儿再开始</div></div></div></div>
-    <div class="tl-item life"><span class="tl-time">17:45-18:15</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🍚</div><div style="flex:1"><div class="nm">晚饭时间</div><div class="ds">全家一起用餐</div></div></div></div>
-    <div class="tl-item life"><span class="tl-time">18:15-18:30</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🧘</div><div style="flex:1"><div class="nm">餐后休息</div><div class="ds">收拾桌面、准备学习</div></div></div></div>
-    <div class="tl-item study" onclick="push('reading')"><span class="tl-time">18:30-18:55</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">📖</div><div style="flex:1"><div class="nm">阅读 · 《神奇校车·水的故事》</div><div class="ds">查看兴趣书单 · 25 分钟</div></div><div style="color:var(--muted);font-size:18px">›</div></div></div>
-    <div class="tl-item life"><span class="tl-time">18:55-19:05</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🧘</div><div style="flex:1"><div class="nm">眼睛休息</div><div class="ds">远眺 · 活动一下</div></div></div></div>
-    <div class="tl-item study" onclick="toggleTask(this)"><span class="tl-time">19:05-19:20</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🔢</div><div style="flex:1"><div class="nm">计算 · 口算 20 题</div><div class="ds">校内同步 · 15 分钟</div></div><div class="ck">✓</div></div></div>
-    <div class="tl-item life"><span class="tl-time">19:20-19:30</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🍎</div><div style="flex:1"><div class="nm">吃点心 · 休息</div><div class="ds">补充能量</div></div></div></div>
-    <div class="tl-item study" onclick="toggleTask(this)"><span class="tl-time">19:30-19:45</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🎧</div><div style="flex:1"><div class="nm">口语陪练 · 先听后说</div><div class="ds">听 10 分钟 + 对练 5 分钟</div></div><div class="ck">✓</div></div></div>
-    <div class="tl-item study" onclick="toggleTask(this)"><span class="tl-time">19:45-20:15</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🎹</div><div style="flex:1"><div class="nm">兴趣打卡 · 钢琴 / 围棋</div><div class="ds">每日坚持 · 30 分钟</div></div><div class="ck">✓</div></div></div>
-    <div class="tl-item life"><span class="tl-time">20:15-21:00</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🎈</div><div style="flex:1"><div class="nm">亲子 / 自由时间</div><div class="ds">聊天、游戏或自由安排</div></div></div></div>
-    <div class="tl-item life"><span class="tl-time">21:00-21:30</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🛁</div><div style="flex:1"><div class="nm">睡前洗漱</div><div class="ds">准备睡觉 · 早睡早起</div></div></div></div>
-  </div>
+  <div class="tl">${homeTimelineHtml()}</div>
   <button class="btn ghost" style="margin-top:12px" onclick="toggleAddPanel()">＋ 添加任务</button>
   <div id="addPanel"></div>
   <div style="height:20px"></div>
