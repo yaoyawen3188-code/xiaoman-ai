@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -339,7 +339,7 @@ async function sendText(input){
   chat.scrollTop = chat.scrollHeight;
 
   chatHistory.push({ role: 'user', content: v });
-  // 家长主动要求「加入书单」时，从上一轮 AI 回复提取书名
+  // 家长说「加入书单」时，从上一轮 AI 回复提取书名
   if(/加入书单|加书单/.test(v)){ addAiBooks(); }
   streaming = true;
 
