@@ -277,6 +277,8 @@ let totalPoints = 1280;
 let chatHistory = [];
 let streaming = false;
 let checkQStreaming = false;
+let lastAiReply = '';
+let aiPlan = '';
 
 /* ---------- 图标 ---------- */
 const ICON = {
@@ -333,6 +335,12 @@ async function sendText(input){
   const aiWho = document.createElement('div'); aiWho.className = 'who'; aiWho.textContent = '小满 · AI 助手';
   const aiContent = document.createElement('div'); aiContent.className = 'ai-content'; aiContent.textContent = '小满正在思考…';
   ai.appendChild(aiWho); ai.appendChild(aiContent);
+  const aiBtn = document.createElement('button');
+  aiBtn.className = 'btn sm ghost';
+  aiBtn.style.cssText = 'width:auto;padding:5px 10px;font-size:11px;margin-top:6px;display:none;flex:none';
+  aiBtn.textContent = '📖 把推荐书加入书单';
+  aiBtn.onclick = () => { addAiBooks(); };
+  ai.appendChild(aiBtn);
   chat.appendChild(ai);
   chat.scrollTop = chat.scrollHeight;
 
@@ -372,6 +380,7 @@ async function sendText(input){
               scrollChat();
             } else if(obj.delta){
               full += obj.delta;
+              lastAiReply += obj.delta;
               aiContent.textContent = full;
               scrollChat();
             }
@@ -383,6 +392,8 @@ async function sendText(input){
     if(!full){
       aiContent.textContent = aiContent.textContent || '（未收到回复内容）';
     }
+    lastAiReply = full;
+    aiBtn.style.display = full ? 'inline-block' : 'none';
     chatHistory.push({ role: 'assistant', content: full || aiContent.textContent });
   } catch(err){
     aiContent.textContent = '⚠️ AI 服务暂时无法连接，请稍后重试或检查后端是否已部署。';
@@ -565,7 +576,7 @@ SCRENS.profile = ()=>`
     <div class="msg user"><div class="who">家长 · 语音</div>希望阅读和口语加强，数学保持就好。<div class="voice-hint">第 3 步 · 培养期望</div></div>
     <div class="msg ai"><div class="who">小满 · AI 助手</div>好嘞，子涵的档案已整理 ✅<br>接下来我会给出 <b>阅读 / 计算 / 口语陪练 / 其他</b> 四个学习方向，你确认后我就生成每日计划。</div>
   </div>
-  <button class="btn" style="margin:14px 16px 0" onclick="goto('directions')">下一步 · 查看学习方向 →</button>
+  <button class="btn" style="margin:14px 16px 0" onclick="gotoDirections()">下一步 · 查看学习方向 →</button>
   <div class="inputbar">
     <button class="mic" onclick="toggleMic(this)"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
     <input class="textbox" placeholder="或文字补充…">
@@ -670,6 +681,93 @@ function refreshBooks(){
   }, 700);
 }
 
+/* ---------- 大模型结果驱动下游页面 ---------- */
+function gotoDirections(){
+  aiPlan = lastAiReply;
+  goto('directions');
+}
+
+function extractBookTitles(text){
+  const set = new Set();
+  const re = /《([^》]+)》/g;
+  let m;
+  while((m = re.exec(text))) set.add(m[1].trim());
+  return Array.from(set);
+}
+
+function addAiBooks(){
+  const titles = extractBookTitles(lastAiReply);
+  if(!titles.length){
+    toast('AI 回复里没有识别到《书名》。可到「兴趣书单」页用「＋添加书籍」手动添加。');
+    return;
+  }
+  let added = 0;
+  for(const t of titles){
+    const exist = BOOKS.find(b => b.title.includes(t) || t.includes(b.title));
+    if(exist) continue;
+    BOOKS.push({
+      id: 'bk' + Date.now().toString(36) + Math.random().toString(36).slice(2,5),
+      icon: '📖',
+      title: t,
+      author: 'AI 推荐',
+      duration: 20,
+      reason: '来自「伴学」对话里 AI 的推荐',
+      chapters: [{ t: '第 1 章 · 已加入书单', done: false }]
+    });
+    added++;
+  }
+  if(added){
+    toast(`已把 ${added} 本书加入书单 ✓`);
+    render();
+  } else {
+    toast('这些书已经在书单里了');
+  }
+}
+
+function toggleBookForm(){
+  const f = document.getElementById('bookForm');
+  if(!f) return;
+  if(f.innerHTML){ f.innerHTML = ''; return; }
+  f.innerHTML = `
+    <div class="card" style="margin-top:12px">
+      <div style="font-weight:800;margin-bottom:10px">添加书籍</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input id="bookName" class="textbox" placeholder="书名，如：《神奇校车·水的故事》" style="width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;font-size:14px;font-family:inherit;outline:none">
+        <div style="display:flex;gap:8px">
+          <input id="bookDur" type="number" placeholder="建议分钟数" value="20" style="flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;font-size:14px;font-family:inherit;outline:none">
+          <input id="bookReason" class="textbox" placeholder="推荐理由（可选）" style="flex:2;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;font-size:14px;font-family:inherit;outline:none">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn sm mint" style="width:auto;padding:8px 14px;font-size:12px" onclick="addBookManual()">确认加入</button>
+          <button class="btn sm ghost" style="width:auto;padding:8px 14px;font-size:12px" onclick="toggleBookForm()">取消</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function addBookManual(){
+  const name = (document.getElementById('bookName')?.value || '').trim();
+  const dur = Number(document.getElementById('bookDur')?.value || '20') || 20;
+  const reason = (document.getElementById('bookReason')?.value || '').trim();
+  if(!name){ toast('请填写书名'); return; }
+  if(BOOKS.find(b => b.title.includes(name) || name.includes(b.title))){
+    toast('这本书已经在书单里了');
+    return;
+  }
+  BOOKS.push({
+    id: 'bk' + Date.now().toString(36) + Math.random().toString(36).slice(2,5),
+    icon: '📖',
+    title: name,
+    author: '手动添加',
+    duration: dur,
+    reason: reason || '家长手动加入书单',
+    chapters: [{ t: '第 1 章 · 已加入书单', done: false }]
+  });
+  toast(`已加入书单：${name} ✓`);
+  toggleBookForm();
+  render();
+}
+
 function bookCard(b){
   const total = b.chapters.length;
   const doneCount = b.chapters.filter(c=>c.done).length;
@@ -751,6 +849,10 @@ SCRENS.directions = ()=>`
 <div class="wrap fade">
   <div class="head"><div class="back" onclick="goBack()">‹</div><h2>AI 学习方向</h2><span class="tag mint">已生成</span></div>
   <div class="hero"><h3>子涵 · 每日计划候选</h3><p>基于年龄、兴趣与培养期望，AI 给出四个方向。计划安排在放学后 17:30-21:30，预留晚饭、休息与睡前洗漱时间。</p></div>
+  ${aiPlan ? `<div class="card" style="background:linear-gradient(135deg,#E8F5E9,#FFF8E1);border-color:#C8E6C9;margin-bottom:12px">
+    <div style="font-weight:800;font-size:13px;color:#2E7D32">🤖 AI 刚生成的学习计划</div>
+    <div style="font-size:13px;line-height:1.65;color:var(--ink);margin-top:6px;white-space:pre-wrap">${aiPlan}</div>
+  </div>` : ''}
   <div class="dir-card">
     <div class="icon mint">📖</div>
     <div class="body">
@@ -823,6 +925,8 @@ SCRENS.reading = ()=>{
         <span class="tag amber">✅ 已读完 ${st.readCount}</span>
       </div>
     </div>
+    <button class="btn ghost" style="margin:0 0 10px;width:auto;padding:8px 14px;font-size:12px" onclick="toggleBookForm()">＋ 添加书籍</button>
+    <div id="bookForm"></div>
     ${BOOKS.map(bookCard).join('')}
     <div style="height:20px"></div>
   </div>`;
