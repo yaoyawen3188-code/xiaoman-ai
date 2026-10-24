@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: xiaoman-ai
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: SPARK_API_KEY
+        sync: false
+        required: true
