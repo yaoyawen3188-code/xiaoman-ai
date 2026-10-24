@@ -295,7 +295,9 @@ function resetProfileChat(){
   try{ localStorage.removeItem('xm_profile_chat'); }catch(e){}
 }
 
-/* ---------- 根据对话文本提取学习方向（要求带时长，避免采集问答误触发） ---------- */
+/* ---------- 根据对话文本提取学习方向 ----------
+   优先识别带时长的方向；没有显式时长时，只要出现「方向/单独/模块/核心/重点/安排」
+   等方向性表达，也补一个默认时长，避免「阅读能力作为单独一个学习方向」被漏掉。 */
 function extractDirections(text){
   text = text || '';
   const groups = [
@@ -305,9 +307,12 @@ function extractDirections(text){
     { key:'oral', kw:['口语','英语','陪练','跟读'], icon:'🗣️', title:'口语陪练', desc:'AI 扮演英语老师陪练，内容同步学校教材并适当扩展。' },
     { key:'other', kw:['钢琴','围棋','兴趣','运动','习惯'], icon:'🎹', title:'其他 · 兴趣与习惯', desc:'兴趣班打卡，以及专注坐姿、屏幕时间等习惯培养。' }
   ];
+  const defaultMin = { tt:15, read:25, calc:15, oral:15, other:30 };
+  const directives = ['方向','单独','模块','核心','列为','重点','重要','作为','计划','安排','培养','需要'];
   const out = [];
   for(const g of groups){
-    const min = findDuration(text, g.kw);
+    let min = findDuration(text, g.kw);
+    if(min === null && hasDirectiveNear(text, g.kw, directives)) min = defaultMin[g.key];
     if(min === null) continue;
     let beforeDinner = false;
     for(const kw of g.kw){
@@ -323,12 +328,28 @@ function extractDirections(text){
   return out;
 }
 
+/* 在关键词附近的窗口内查找方向性表达 */
+function hasDirectiveNear(text, keywords, directives){
+  for(const kw of keywords){
+    let idx = text.indexOf(kw);
+    while(idx >= 0){
+      const start = Math.max(0, idx - 15);
+      const seg = text.slice(start, idx + 50);
+      for(const d of directives){
+        if(seg.indexOf(d) >= 0) return true;
+      }
+      idx = text.indexOf(kw, idx + 1);
+    }
+  }
+  return false;
+}
+
 /* ---------- 根据 AI 回复动态生成方向卡片 ---------- */
 function genDirCards(text){
   if(!text) return '';
   const dirs = extractDirections(text);
   if(!dirs.length){
-    return `<div style="text-align:center;color:var(--muted);padding:24px 16px;font-size:13px;line-height:1.6">AI 回复里还没有识别到带时长的学习方向。可以先在「伴学」里继续说明，例如「阅读每天 25 分钟」。</div>`;
+    return `<div style="text-align:center;color:var(--muted);padding:24px 16px;font-size:13px;line-height:1.6">还没有识别到学习方向。可以先在「伴学」里继续说明，例如「阅读能力作为单独一个学习方向」。</div>`;
   }
   const colorOf = (k) => ({tt:'mint',read:'mint',calc:'amber',oral:'coral',other:'indigo'})[k];
   const ctxTag = { tt:'同步练习', read:'兴趣书单', calc:'校内同步', oral:'教材同步', other:'每日打卡' };
@@ -1102,8 +1123,8 @@ function defaultBook(){
 function findDuration(text, keywords, window){
   window = window || 45;
   for(const kw of keywords){
-    const idx = text.indexOf(kw);
-    if(idx >= 0){
+    let idx = text.indexOf(kw);
+    while(idx >= 0){
       const seg = text.slice(idx, idx + window);
       const m = seg.match(/(\d{1,2}|[一二两三四五六七八九十]+)\s*(?:个)?\s*(小时|分钟|min)/);
       if(m){
@@ -1112,6 +1133,7 @@ function findDuration(text, keywords, window){
           return m[2].indexOf('小时') >= 0 ? n * 60 : n;
         }
       }
+      idx = text.indexOf(kw, idx + 1);
     }
   }
   return null;
