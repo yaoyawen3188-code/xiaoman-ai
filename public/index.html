@@ -340,7 +340,7 @@ async function sendText(input){
 
   chatHistory.push({ role: 'user', content: v });
   // 家长主动要求「加入书单」时，从上一轮 AI 回复提取书名
-  if(/加入书单|加入清单|加到书单|加书单|加清单/.test(v)){ addAiBooks(); }
+  if(/加入书单|加书单/.test(v)){ addAiBooks(); }
   streaming = true;
 
   const scrollChat = () => { chat.scrollTop = chat.scrollHeight; };
