@@ -341,6 +341,16 @@ function genDirCards(text){
       </div>
     </div>`);
   }
+  if(has('天天练') || has('学习天天练')){
+    cards.push(`<div class="dir-card">
+      <div class="icon mint">📚</div>
+      <div class="body">
+        <h4>学习天天练</h4>
+        <p>结合「天天练」每日练习内容，安排对应时长并跟踪完成情况。</p>
+        <div class="meta"><span class="tag mint">每天 15 分钟</span><span class="tag indigo">同步练习</span></div>
+      </div>
+    </div>`);
+  }
   if(!cards.length){
     return `<div style="text-align:center;color:var(--muted);padding:24px 16px;font-size:13px;line-height:1.6">AI 回复中未识别到具体方向关键词，可继续在「伴学」对话中补充说明。</div>`;
   }
@@ -770,10 +780,10 @@ async function gotoDirections(){
     const btn = document.getElementById('nextBtn');
     if(btn){ btn.textContent = 'AI 正在生成…'; btn.disabled = true; }
     await sendText(ti);
-    if(btn){ btn.textContent = '下一步 · 查看学习方向 →'; btn.disabled = false; }
+    if(btn){ btn.textContent = '下一步 →'; btn.disabled = false; }
   }
   aiPlan = lastAiReply;
-  goto('directions');
+  push('directions');
 }
 
 function extractBookTitles(text){
@@ -938,10 +948,6 @@ SCRENS.directions = ()=>`
 <div class="wrap fade">
   <div class="head"><div class="back" onclick="goBack()">‹</div><h2>AI 学习方向</h2><span class="tag ${aiPlan?'mint':'amber'}">${aiPlan?'AI 生成':'示例'}</span></div>
   ${aiPlan ? `
-    <div class="card" style="background:linear-gradient(135deg,#E8F5E9,#FFF8E1);border-color:#C8E6C9">
-      <div style="font-weight:800;font-size:13px;color:#2E7D32">🤖 小满刚生成的学习计划</div>
-      <div style="font-size:13px;line-height:1.7;color:var(--ink);margin-top:8px;white-space:pre-wrap">${aiPlan}</div>
-    </div>
     ${genDirCards(aiPlan)}
   ` : `
     <div class="hero"><h3>子涵 · 每日计划候选</h3><p>基于年龄、兴趣与培养期望，AI 给出四个方向。计划安排在放学后 17:30-21:30，预留晚饭、休息与睡前洗漱时间。</p></div>
