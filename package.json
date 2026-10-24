@@ -1,0 +1,17 @@
+{
+  "name": "xiaoman-ai-deploy",
+  "version": "1.0.0",
+  "description": "小满伴学 · AI陪伴学习硬件 MVP —— 后端服务（讯飞星火 X2.6-4B，星辰 MaaS）",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
