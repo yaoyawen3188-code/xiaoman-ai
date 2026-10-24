@@ -295,66 +295,57 @@ function resetProfileChat(){
   try{ localStorage.removeItem('xm_profile_chat'); }catch(e){}
 }
 
+/* ---------- 根据对话文本提取学习方向（要求带时长，避免采集问答误触发） ---------- */
+function extractDirections(text){
+  text = text || '';
+  const groups = [
+    { key:'tt', kw:['数学天天练','数学每日练习','天天练','每日练习','每日练','数学练习'], icon:'📐', title:'学习天天练', desc:'结合「天天练」每日练习内容，安排对应时长并跟踪完成情况。' },
+    { key:'read', kw:['阅读','书单','书籍','绘本'], icon:'📖', title:'阅读能力', desc:'符合年龄 + 兴趣的书单，科学拆分每日阅读时间。' },
+    { key:'calc', kw:['口算','计算','算术','数学计算'], icon:'🔢', title:'计算能力', desc:'结合校内任务与口算练习，按兴趣安排每日时长。' },
+    { key:'oral', kw:['口语','英语','陪练','跟读'], icon:'🗣️', title:'口语陪练', desc:'AI 扮演英语老师陪练，内容同步学校教材并适当扩展。' },
+    { key:'other', kw:['钢琴','围棋','兴趣','运动','习惯'], icon:'🎹', title:'其他 · 兴趣与习惯', desc:'兴趣班打卡，以及专注坐姿、屏幕时间等习惯培养。' }
+  ];
+  const out = [];
+  for(const g of groups){
+    const min = findDuration(text, g.kw);
+    if(min === null) continue;
+    let beforeDinner = false;
+    for(const kw of g.kw){
+      const idx = text.indexOf(kw);
+      if(idx >= 0){
+        const seg = text.slice(idx, idx + 50);
+        if(seg.indexOf('晚饭前') >= 0) beforeDinner = true;
+        break;
+      }
+    }
+    out.push({ key:g.key, icon:g.icon, title:g.title, desc:g.desc, min, beforeDinner });
+  }
+  return out;
+}
+
 /* ---------- 根据 AI 回复动态生成方向卡片 ---------- */
 function genDirCards(text){
   if(!text) return '';
-  const has = (kw) => text.includes(kw);
-  const cards = [];
-  if(has('阅读') || has('书单') || has('书籍')){
-    cards.push(`<div class="dir-card">
-      <div class="icon mint">📖</div>
+  const dirs = extractDirections(text);
+  if(!dirs.length){
+    return `<div style="text-align:center;color:var(--muted);padding:24px 16px;font-size:13px;line-height:1.6">AI 回复里还没有识别到带时长的学习方向。可以先在「伴学」里继续说明，例如「阅读每天 25 分钟」。</div>`;
+  }
+  const colorOf = (k) => ({tt:'mint',read:'mint',calc:'amber',oral:'coral',other:'indigo'})[k];
+  const ctxTag = { tt:'同步练习', read:'兴趣书单', calc:'校内同步', oral:'教材同步', other:'每日打卡' };
+  return dirs.map(d => {
+    const color = colorOf(d.key);
+    const beforeTag = d.beforeDinner ? `<span class="tag amber">晚饭前</span>` : '';
+    const readBtn = d.key === 'read' ? `<button class="btn sm mint" style="margin-top:10px;width:auto;padding:8px 14px" onclick="push('reading')">查看书单 →</button>` : '';
+    return `<div class="dir-card">
+      <div class="icon ${color}">${d.icon}</div>
       <div class="body">
-        <h4>阅读能力</h4>
-        <p>符合年龄 + 兴趣的书单，科学拆分每日阅读时间。</p>
-        <div class="meta"><span class="tag mint">每天 20 分钟</span><span class="tag coral">兴趣书单</span></div>
-        <button class="btn sm mint" style="margin-top:10px;width:auto;padding:8px 14px" onclick="push('reading')">查看书单 →</button>
+        <h4>${d.title}</h4>
+        <p>${d.desc}</p>
+        <div class="meta"><span class="tag ${color}">${fmtMin(d.min)}</span><span class="tag indigo">${ctxTag[d.key]}</span>${beforeTag}</div>
+        ${readBtn}
       </div>
-    </div>`);
-  }
-  if(has('计算') || has('口算') || has('算术') || has('数学计算')){
-    cards.push(`<div class="dir-card">
-      <div class="icon amber">🔢</div>
-      <div class="body">
-        <h4>计算能力</h4>
-        <p>结合校内任务与口算练习，按兴趣安排每日时长。</p>
-        <div class="meta"><span class="tag amber">每天 15 分钟</span><span class="tag indigo">校内同步</span></div>
-      </div>
-    </div>`);
-  }
-  if(has('口语') || has('英语') || has('陪练')){
-    cards.push(`<div class="dir-card">
-      <div class="icon coral">🗣️</div>
-      <div class="body">
-        <h4>口语陪练</h4>
-        <p>AI 扮演英语老师陪练，内容同步学校教材并适当扩展。</p>
-        <div class="meta"><span class="tag coral">每天 15 分钟</span><span class="tag indigo">学校教材同步</span><span class="tag mint">克隆音色</span></div>
-      </div>
-    </div>`);
-  }
-  if(has('其他') || has('兴趣') || has('习惯') || has('钢琴') || has('围棋')){
-    cards.push(`<div class="dir-card">
-      <div class="icon indigo">🎹</div>
-      <div class="body">
-        <h4>其他 · 兴趣与习惯</h4>
-        <p>兴趣班打卡，以及专注坐姿、屏幕时间等习惯培养。</p>
-        <div class="meta"><span class="tag indigo">每日打卡</span><span class="tag coral">可扩展</span></div>
-      </div>
-    </div>`);
-  }
-  if(has('天天练') || has('学习天天练') || has('数学每日练习') || has('每日练习') || has('数学练习')){
-    cards.push(`<div class="dir-card">
-      <div class="icon mint">📚</div>
-      <div class="body">
-        <h4>学习天天练</h4>
-        <p>结合「天天练」每日练习内容，安排对应时长并跟踪完成情况。</p>
-        <div class="meta"><span class="tag mint">每天 15 分钟</span><span class="tag indigo">同步练习</span></div>
-      </div>
-    </div>`);
-  }
-  if(!cards.length){
-    return `<div style="text-align:center;color:var(--muted);padding:24px 16px;font-size:13px;line-height:1.6">AI 回复中未识别到具体方向关键词，可继续在「伴学」对话中补充说明。</div>`;
-  }
-  return cards.join('');
+    </div>`;
+  }).join('');
 }
 
 /* ---------- 图标 ---------- */
@@ -782,7 +773,11 @@ async function gotoDirections(){
     await sendText(ti);
     if(btn){ btn.textContent = '下一步 →'; btn.disabled = false; }
   }
-  aiPlan = lastAiReply;
+  // 把整个伴学对话（家长要求 + AI 回复）作为学习方向依据
+  const pm = loadProfileChat();
+  const userPart = pm.filter(m => m.role === 'user').map(m => m.content).join('\n');
+  const aiPart = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
+  aiPlan = (userPart + '\n' + aiPart).trim();
   push('directions');
 }
 
@@ -988,22 +983,27 @@ SCRENS.directions = ()=>`
   <button class="btn" onclick="push('confirm')">进入计划确认</button>
 </div>`;
 
-SCRENS.confirm = ()=>`
+SCRENS.confirm = ()=>{
+  const tasks = planTasks();
+  const planItems = tasks.map((t,i) => `${i+1}. ${t.icon} ${t.name} · ${fmtMin(t.min)}`).join('<br>');
+  return `
 <div class="wrap fade" style="padding-bottom:80px">
-  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>学习计划 · AI 对话确认</h2><span></span></div>
+  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>学习计划 · 家长确认</h2><span></span></div>
   <div class="chat">
-    <div class="msg ai"><div class="who">小满 · AI 助手</div>我拟了一份<b>工作日计划</b>，安排在放学后 <b>17:30</b> 到睡前 <b>21:30</b>，中间预留了晚饭、休息和睡前洗漱时间。请逐项确认：<br>① 阅读《神奇校车》20 分钟<br>② 计算口算 15 分钟<br>③ 口语陪练「先听后说」15 分钟</div>
-    <div class="msg user"><div class="who">家长 · 文字</div>阅读能加到 25 分钟吗？</div>
-    <div class="msg ai"><div class="who">小满 · AI 助手</div>已调整 ✅ 学习任务共 <b>55 分钟</b>：阅读 25min + 计算 15min + 口语陪练 15min，穿插晚饭、休息，21:00 开始洗漱，劳逸结合。</div>
-    <div class="msg user"><div class="who">家长 · 语音</div>好的，就这样。<div class="voice-hint">语音识别</div></div>
-    <div class="msg ai"><div class="who">小满 · AI 助手</div>计划已确认并下发到「小满」设备 🤖<br>之后每天我会提醒子涵，并推送学习验收给你。</div>
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>我根据伴学档案拟了一份<b>工作日计划</b>，安排在放学后 <b>17:30</b> 到睡前 <b>21:30</b>，中间预留晚饭、休息和睡前洗漱时间。请你逐项确认，或告诉我要调整的地方：<br><br>${planItems || '（暂未生成具体任务，可先在「伴学」里补充时长要求）'}</div>
   </div>
   <div class="inputbar">
     <button class="mic" onclick="toggleMic(this)"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
-    <input class="textbox" placeholder="继续对话确认…">
+    <input class="textbox" placeholder="可以调整时长或顺序，例如：阅读加到 30 分钟…">
   </div>
-  <div style="padding:0 16px"><button class="btn" onclick="goto('home')">查看今日计划 →</button></div>
+  <div style="padding:0 16px"><button class="btn mint" onclick="confirmPlan()">确认并下发到「小满」设备</button></div>
 </div>`;
+};
+
+function confirmPlan(){
+  toast('学习计划已确认，并下发到「小满」设备 🤖');
+  goto('home');
+}
 
 SCRENS.reading = ()=>{
   const st = bookStats();
@@ -1122,38 +1122,6 @@ function planTasks(){
   const bookMatch = text.match(/《([^》]+)》/);
   const book = bookMatch ? '《' + bookMatch[1].trim() + '》' : defaultBook();
 
-  const groups = [
-    { key:'tt', kw:['数学天天练','数学每日练习','天天练','每日练习','每日练','数学练习'], icon:'📐', name:'数学天天练', desc:'单独任务 · 校内练习', onclick:'toggleTask(this)' },
-    { key:'read', kw:['阅读','书单','书籍','绘本'], icon:'📖', name:`阅读 · ${book}`, desc:'查看兴趣书单', onclick:"push('reading')", arrow:true },
-    { key:'calc', kw:['口算','计算','算术','数学计算'], icon:'🔢', name:'计算 · 口算练习', desc:'校内同步', onclick:'toggleTask(this)' },
-    { key:'oral', kw:['口语','英语','陪练','跟读'], icon:'🎧', name:'口语陪练 · 先听后说', desc:'听 + 对练', onclick:'toggleTask(this)' },
-    { key:'other', kw:['钢琴','围棋','兴趣','运动','习惯'], icon:'🎹', name:'兴趣打卡 · 钢琴 / 围棋', desc:'每日坚持', onclick:'toggleTask(this)' }
-  ];
-
-  const tasks = [];
-  for(const g of groups){
-    const min = findDuration(text, g.kw);
-    if(min === null) continue;
-    let beforeDinner = false;
-    for(const kw of g.kw){
-      const idx = text.indexOf(kw);
-      if(idx >= 0){
-        const seg = text.slice(idx, idx + 50);
-        if(seg.indexOf('晚饭前') >= 0) beforeDinner = true;
-        break;
-      }
-    }
-    tasks.push({
-      name: g.name,
-      icon: g.icon,
-      desc: `${fmtMin(min)} · ${g.desc}`,
-      min,
-      beforeDinner,
-      arrow: g.arrow,
-      onclick: g.onclick
-    });
-  }
-
   // 还没有 AI 计划时，回退到默认四项
   if(!aiPlan){
     return [
@@ -1163,7 +1131,33 @@ function planTasks(){
       { name:'兴趣打卡 · 钢琴 / 围棋', icon:'🎹', desc:'每日坚持 · 30 分钟', min:30, beforeDinner:false, onclick:'toggleTask(this)' }
     ];
   }
-  return tasks;
+
+  const dirs = extractDirections(text);
+  return dirs.map(d => {
+    let name = d.title;
+    let desc = `${fmtMin(d.min)} · ${d.desc}`;
+    let onclick = 'toggleTask(this)';
+    let arrow = false;
+    if(d.key === 'tt'){
+      name = '数学天天练';
+      desc = `${fmtMin(d.min)} · 单独任务 · 校内练习`;
+    } else if(d.key === 'read'){
+      name = `阅读 · ${book}`;
+      desc = `${fmtMin(d.min)} · 查看兴趣书单`;
+      onclick = "push('reading')";
+      arrow = true;
+    } else if(d.key === 'calc'){
+      name = '计算 · 口算练习';
+      desc = `${fmtMin(d.min)} · 校内同步`;
+    } else if(d.key === 'oral'){
+      name = '口语陪练 · 先听后说';
+      desc = `${fmtMin(d.min)} · 听 + 对练`;
+    } else if(d.key === 'other'){
+      name = '兴趣打卡 · 钢琴 / 围棋';
+      desc = `${fmtMin(d.min)} · 每日坚持`;
+    }
+    return { name, icon:d.icon, desc, min:d.min, beforeDinner:d.beforeDinner, arrow, onclick };
+  });
 }
 
 function lifeItem(start, end, icon, name, desc){
