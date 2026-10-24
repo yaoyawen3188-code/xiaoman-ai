@@ -280,6 +280,73 @@ let checkQStreaming = false;
 let lastAiReply = '';
 let aiPlan = '';
 
+/* ---------- 伴学页历史持久化 ---------- */
+function loadProfileChat(){
+  try{
+    const raw = localStorage.getItem('xm_profile_chat');
+    if(!raw) return [];
+    return JSON.parse(raw);
+  }catch(e){ return []; }
+}
+function saveProfileChat(msgs){
+  try{ localStorage.setItem('xm_profile_chat', JSON.stringify(msgs)); }catch(e){}
+}
+function resetProfileChat(){
+  try{ localStorage.removeItem('xm_profile_chat'); }catch(e){}
+}
+
+/* ---------- 根据 AI 回复动态生成方向卡片 ---------- */
+function genDirCards(text){
+  if(!text) return '';
+  const has = (kw) => text.includes(kw);
+  const cards = [];
+  if(has('阅读') || has('书单') || has('书籍')){
+    cards.push(`<div class="dir-card">
+      <div class="icon mint">📖</div>
+      <div class="body">
+        <h4>阅读能力</h4>
+        <p>符合年龄 + 兴趣的书单，科学拆分每日阅读时间。</p>
+        <div class="meta"><span class="tag mint">每天 20 分钟</span><span class="tag coral">兴趣书单</span></div>
+        <button class="btn sm mint" style="margin-top:10px;width:auto;padding:8px 14px" onclick="push('reading')">查看书单 →</button>
+      </div>
+    </div>`);
+  }
+  if(has('计算') || has('数学') || has('口算')){
+    cards.push(`<div class="dir-card">
+      <div class="icon amber">🔢</div>
+      <div class="body">
+        <h4>计算能力</h4>
+        <p>结合校内任务与口算练习，按兴趣安排每日时长。</p>
+        <div class="meta"><span class="tag amber">每天 15 分钟</span><span class="tag indigo">校内同步</span></div>
+      </div>
+    </div>`);
+  }
+  if(has('口语') || has('英语') || has('陪练')){
+    cards.push(`<div class="dir-card">
+      <div class="icon coral">🗣️</div>
+      <div class="body">
+        <h4>口语陪练</h4>
+        <p>AI 扮演英语老师陪练，内容同步学校教材并适当扩展。</p>
+        <div class="meta"><span class="tag coral">每天 15 分钟</span><span class="tag indigo">学校教材同步</span><span class="tag mint">克隆音色</span></div>
+      </div>
+    </div>`);
+  }
+  if(has('其他') || has('兴趣') || has('习惯') || has('钢琴') || has('围棋')){
+    cards.push(`<div class="dir-card">
+      <div class="icon indigo">🎹</div>
+      <div class="body">
+        <h4>其他 · 兴趣与习惯</h4>
+        <p>兴趣班打卡，以及专注坐姿、屏幕时间等习惯培养。</p>
+        <div class="meta"><span class="tag indigo">每日打卡</span><span class="tag coral">可扩展</span></div>
+      </div>
+    </div>`);
+  }
+  if(!cards.length){
+    return `<div style="text-align:center;color:var(--muted);padding:24px 16px;font-size:13px;line-height:1.6">AI 回复中未识别到具体方向关键词，可继续在「伴学」对话中补充说明。</div>`;
+  }
+  return cards.join('');
+}
+
 /* ---------- 图标 ---------- */
 const ICON = {
   home:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
@@ -339,6 +406,12 @@ async function sendText(input){
   chat.scrollTop = chat.scrollHeight;
 
   chatHistory.push({ role: 'user', content: v });
+  // 保存到伴学页历史
+  if(stack[stack.length-1]==='profile'){
+    const pm = loadProfileChat();
+    pm.push({ role:'user', content:v, fromVoice });
+    saveProfileChat(pm);
+  }
   // 家长说「加入书单」时，从上一轮 AI 回复提取书名
   if(/加入书单|加书单/.test(v)){ addAiBooks(); }
   streaming = true;
@@ -390,6 +463,12 @@ async function sendText(input){
     }
     lastAiReply = full;
     chatHistory.push({ role: 'assistant', content: full || aiContent.textContent });
+    // 保存到伴学页历史
+    if(stack[stack.length-1]==='profile'){
+      const pm = loadProfileChat();
+      pm.push({ role:'assistant', content: full || aiContent.textContent });
+      saveProfileChat(pm);
+    }
   } catch(err){
     aiContent.textContent = '⚠️ AI 服务暂时无法连接，请稍后重试或检查后端是否已部署。';
     scrollChat();
@@ -559,24 +638,31 @@ function setCloneVoice(name){
   render();
 }
 
-SCRENS.profile = ()=>`
-<div class="wrap fade" style="padding-bottom:80px">
-  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>AI 伴学 · 定制专属学习目标</h2></div>
-  <div class="chat">
+SCRENS.profile = ()=>{
+  const msgs = loadProfileChat();
+  const defaultChat = `
     <div class="msg ai"><div class="who">小满 · AI 助手</div>你好呀～我是「小满」🌱<br>为了给<b>子涵</b>制定科学计划，我会用语音逐项采集：<b>年龄、年级、性别、兴趣（IP / 人物 / 音乐 / 书籍）、兴趣班、培养期望</b>。按下方麦克风说话即可，也能打字补充。</div>
     <div class="msg user"><div class="who">家长 · 语音</div>孩子8岁，二年级，男孩。<div class="voice-hint">第 1 步 · 年龄 / 年级 / 性别</div></div>
     <div class="msg ai"><div class="who">小满 · AI 助手</div>收到～平时喜欢哪些 IP、人物、音乐或书籍？现在在上什么兴趣班？</div>
     <div class="msg user"><div class="who">家长 · 语音</div>喜欢奥特曼和汪汪队，爱看《神奇校车》，在上钢琴和围棋班。<div class="voice-hint">第 2 步 · 兴趣 / IP / 兴趣班</div></div>
     <div class="msg ai"><div class="who">小满 · AI 助手</div>太棒了！最后，你希望重点培养哪方面？阅读、计算、口语，还是全面发展？</div>
     <div class="msg user"><div class="who">家长 · 语音</div>希望阅读和口语加强，数学保持就好。<div class="voice-hint">第 3 步 · 培养期望</div></div>
-    <div class="msg ai"><div class="who">小满 · AI 助手</div>好嘞，子涵的档案已整理 ✅<br>接下来我会给出 <b>阅读 / 计算 / 口语陪练 / 其他</b> 四个学习方向，你确认后我就生成每日计划。</div>
-  </div>
-  <button class="btn" style="margin:14px 16px 0" id="nextBtn" onclick="gotoDirections()">下一步 · 查看学习方向 →</button>
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>好嘞，子涵的档案已整理 ✅<br>接下来我会给出 <b>阅读 / 计算 / 口语陪练 / 其他</b> 四个学习方向，你确认后我就生成每日计划。</div>`;
+  const chatHtml = msgs.length ? msgs.map(m => {
+    const who = m.role === 'assistant' ? '小满 · AI 助手' : (m.fromVoice ? '家长 · 语音' : '家长 · 文字');
+    return `<div class="msg ${m.role}"><div class="who">${who}</div>${m.content}</div>`;
+  }).join('') : defaultChat;
+  return `
+<div class="wrap fade" style="padding-bottom:80px">
+  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>AI 伴学 · 定制专属学习目标</h2>${msgs.length?'<button class="btn sm ghost" style="width:auto;padding:4px 10px;font-size:11px;margin-left:auto" onclick="resetProfileChat();render()">重新采集</button>':''}</div>
+  <div class="chat">${chatHtml}</div>
+  <button class="btn" style="margin:14px 16px 0" id="nextBtn" onclick="gotoDirections()">下一步 →</button>
   <div class="inputbar">
     <button class="mic" onclick="toggleMic(this)"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
     <input class="textbox" placeholder="或文字补充…">
   </div>
 </div>`;
+};
 
 function toggleMic(el){
   const bar = el.closest('.inputbar');
@@ -856,43 +942,43 @@ SCRENS.directions = ()=>`
       <div style="font-weight:800;font-size:13px;color:#2E7D32">🤖 小满刚生成的学习计划</div>
       <div style="font-size:13px;line-height:1.7;color:var(--ink);margin-top:8px;white-space:pre-wrap">${aiPlan}</div>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin:16px 0 8px">快捷入口 · 点击可查看或操作</div>
+    ${genDirCards(aiPlan)}
   ` : `
     <div class="hero"><h3>子涵 · 每日计划候选</h3><p>基于年龄、兴趣与培养期望，AI 给出四个方向。计划安排在放学后 17:30-21:30，预留晚饭、休息与睡前洗漱时间。</p></div>
+    <div class="dir-card">
+      <div class="icon mint">📖</div>
+      <div class="body">
+        <h4>阅读能力</h4>
+        <p>符合年龄 + 兴趣的书单（如《神奇校车》系列），科学拆分每日阅读时间。</p>
+        <div class="meta"><span class="tag mint">每天 20 分钟</span><span class="tag coral">兴趣书单</span></div>
+        <button class="btn sm mint" style="margin-top:10px;width:auto;padding:8px 14px" onclick="push('reading')">查看书单 →</button>
+      </div>
+    </div>
+    <div class="dir-card">
+      <div class="icon amber">🔢</div>
+      <div class="body">
+        <h4>计算能力</h4>
+        <p>结合校内任务与口算练习，按兴趣安排每日时长，保持数学状态。</p>
+        <div class="meta"><span class="tag amber">每天 15 分钟</span><span class="tag indigo">校内同步</span></div>
+      </div>
+    </div>
+    <div class="dir-card">
+      <div class="icon coral">🗣️</div>
+      <div class="body">
+        <h4>口语陪练</h4>
+        <p>AI 按子涵英语水平扮演英语老师陪练，内容同步学校教材并适当扩展。</p>
+        <div class="meta"><span class="tag coral">每天 15 分钟</span><span class="tag indigo">学校教材同步</span><span class="tag mint">克隆音色</span></div>
+      </div>
+    </div>
+    <div class="dir-card">
+      <div class="icon indigo">🎹</div>
+      <div class="body">
+        <h4>其他 · 兴趣与习惯</h4>
+        <p>钢琴、围棋打卡，以及专注坐姿、屏幕时间等习惯培养。</p>
+        <div class="meta"><span class="tag indigo">每日打卡</span><span class="tag coral">可扩展</span></div>
+      </div>
+    </div>
   `}
-  <div class="dir-card">
-    <div class="icon mint">📖</div>
-    <div class="body">
-      <h4>阅读能力</h4>
-      <p>符合年龄 + 兴趣的书单（如《神奇校车》系列），科学拆分每日阅读时间。</p>
-      <div class="meta"><span class="tag mint">每天 20 分钟</span><span class="tag coral">兴趣书单</span></div>
-      <button class="btn sm mint" style="margin-top:10px;width:auto;padding:8px 14px" onclick="push('reading')">查看书单 →</button>
-    </div>
-  </div>
-  <div class="dir-card">
-    <div class="icon amber">🔢</div>
-    <div class="body">
-      <h4>计算能力</h4>
-      <p>结合校内任务与口算练习，按兴趣安排每日时长，保持数学状态。</p>
-      <div class="meta"><span class="tag amber">每天 15 分钟</span><span class="tag indigo">校内同步</span></div>
-    </div>
-  </div>
-  <div class="dir-card">
-    <div class="icon coral">🗣️</div>
-    <div class="body">
-      <h4>口语陪练</h4>
-      <p>AI 按子涵英语水平扮演英语老师陪练，内容同步学校教材并适当扩展。</p>
-      <div class="meta"><span class="tag coral">每天 15 分钟</span><span class="tag indigo">学校教材同步</span><span class="tag mint">克隆音色</span></div>
-    </div>
-  </div>
-  <div class="dir-card">
-    <div class="icon indigo">🎹</div>
-    <div class="body">
-      <h4>其他 · 兴趣与习惯</h4>
-      <p>钢琴、围棋打卡，以及专注坐姿、屏幕时间等习惯培养。</p>
-      <div class="meta"><span class="tag indigo">每日打卡</span><span class="tag coral">可扩展</span></div>
-    </div>
-  </div>
   <button class="btn" onclick="push('confirm')">进入计划确认</button>
 </div>`;
 
