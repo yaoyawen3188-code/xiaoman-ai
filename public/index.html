@@ -269,7 +269,6 @@ const body = document.getElementById('screenBody');
 const tabbar = document.getElementById('tabbar');
 const devBody = document.getElementById('devBody');
 let stack = ['welcome'];
-let micOn = false;
 let deviceScreen = 'home';
 let bound = false;
 let cloneVoice = null;
@@ -318,13 +317,14 @@ async function sendText(input){
   if(!chat) return;
 
   // 家长消息
+  const fromVoice = input && input.getAttribute('data-from-voice') === '1';
   const d = document.createElement('div');
   d.className = 'msg user';
-  const who = document.createElement('div'); who.className = 'who'; who.textContent = '家长 · 文字';
+  const who = document.createElement('div'); who.className = 'who'; who.textContent = fromVoice ? '家长 · 语音' : '家长 · 文字';
   const p = document.createElement('div'); p.textContent = v;
   d.appendChild(who); d.appendChild(p);
   chat.appendChild(d);
-  input.value = '';
+  if(input){ input.value = ''; input.removeAttribute('data-from-voice'); }
   chat.scrollTop = chat.scrollHeight;
 
   // AI 占位
@@ -397,21 +397,83 @@ function renderTabs(){
   tabbar.innerHTML = TABS.map(t=>`<div class="tab ${t.key===cur?'active':''}" onclick="goto('${t.key}')">${t.svg}<span>${t.label}</span></div>`).join('');
 }
 
+/* ---------- 语音识别（浏览器原生 Web Speech API） ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let recording = false;
+
+function ensureRecognition(){
+  if (!SR) return null;
+  if (!recognition){
+    recognition = new SR();
+    recognition.lang = 'zh-CN';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+  }
+  return recognition;
+}
+
+function stopVoice(){
+  recording = false;
+  if (recognition){ try { recognition.stop(); } catch(e){} }
+}
+
+function startVoice(el, opts){
+  opts = opts || {};
+  if (recording){
+    stopVoice();
+    el.classList.remove('rec');
+    if (opts.hint) opts.hint.textContent = '已停止';
+    return;
+  }
+  if (!SR){
+    alert('当前浏览器不支持语音识别，请用 Chrome 或 Edge 打开这个页面再试。');
+    return;
+  }
+  const rec = ensureRecognition();
+  if (!rec) return;
+  recording = true;
+  el.classList.add('rec');
+  if (opts.hint) opts.hint.textContent = '正在聆听… 请说话';
+
+  let finalText = '';
+  rec.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++){
+      const tr = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += tr;
+      else interim += tr;
+    }
+    if (opts.input){
+      opts.input.value = finalText || interim;
+      if (finalText) opts.input.setAttribute('data-from-voice', '1');
+    }
+  };
+  rec.onerror = (e) => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+      alert('没有拿到麦克风权限，请允许浏览器使用麦克风后重试。');
+    }
+  };
+  rec.onend = () => {
+    recording = false;
+    el.classList.remove('rec');
+    if (opts.hint) opts.hint.textContent = '语音已识别 ✓';
+    if (opts.onDone) opts.onDone((finalText || '').trim());
+  };
+  try { rec.start(); } catch(e){}
+}
+
 /* ---------- 语音按钮 ---------- */
 function bindMic(el){
   if(!el) return;
   el.onclick = ()=>{
-    micOn = !micOn;
-    el.classList.toggle('rec', micOn);
-    if(micOn){
-      const hint = document.querySelector('.mic-hint');
-      if(hint) hint.textContent = '正在聆听… 请说话';
-    } else {
-      const hint = document.querySelector('.mic-hint');
-      if(hint) hint.textContent = '语音已识别 ✓';
-    }
+    const bar = el.closest('.inputbar');
+    const input = bar ? bar.querySelector('.textbox') : null;
+    startVoice(el, { input });
   };
 }
+
 
 /* ---------- QR ---------- */
 function qrSVG(){
@@ -511,8 +573,9 @@ SCRENS.profile = ()=>`
 </div>`;
 
 function toggleMic(el){
-  micOn = !micOn;
-  el.classList.toggle('rec', micOn);
+  const bar = el.closest('.inputbar');
+  const input = bar ? bar.querySelector('.textbox') : null;
+  startVoice(el, { input });
 }
 
 /* ---------- 兴趣书单（基于孩子档案个性化推荐） ---------- */
