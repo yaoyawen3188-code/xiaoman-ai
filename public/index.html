@@ -434,8 +434,13 @@ async function sendText(input){
     pm.push({ role:'user', content:v, fromVoice });
     saveProfileChat(pm);
   }
-  // 家长说「加入书单」时，从上一轮 AI 回复提取书名
-  if(/加入书单|加书单/.test(v)){ addAiBooks(); }
+  // 家长说「去掉某本书」时，从书单移除；说「加入书单」时，从上一轮 AI 回复提取书名
+  const removed = removeBooksFromText(v);
+  if(removed.length){
+    toast(`已从书单移除 ${removed.length} 本：${removed.map(t=>t).join('、')}`);
+    render();
+  }
+  if(/加入书单|加书单/.test(v)){ addAiBooks(removed); }
   streaming = true;
 
   const scrollChat = () => { chat.scrollTop = chat.scrollHeight; };
@@ -757,6 +762,17 @@ function addToPlan(id){
   render();
 }
 
+function removeBook(id){
+  const idx = BOOKS.findIndex(x=>x.id===id);
+  if(idx < 0) return;
+  const [b] = BOOKS.splice(idx, 1);
+  for(let i = planBookIds.length - 1; i >= 0; i--){
+    if(planBookIds[i] === b.id) planBookIds.splice(i, 1);
+  }
+  toast(`已从书单移除《${b.title}》`);
+  render();
+}
+
 function fmtDuration(m){
   if(m<=0) return '0 分钟';
   const h = Math.floor(m/60), mm = m%60;
@@ -810,7 +826,7 @@ function extractBookTitles(text){
   return Array.from(set);
 }
 
-function addAiBooks(){
+function addAiBooks(excludeTitles){
   const titles = extractBookTitles(lastAiReply);
   if(!titles.length){
     toast('AI 回复里没有识别到《书名》。可到「兴趣书单」页用「＋添加书籍」手动添加。');
@@ -818,6 +834,7 @@ function addAiBooks(){
   }
   let added = 0;
   for(const t of titles){
+    if(excludeTitles && excludeTitles.some(x => x.includes(t) || t.includes(x))) continue;
     const exist = BOOKS.find(b => b.title.includes(t) || t.includes(b.title));
     if(exist) continue;
     BOOKS.push({
@@ -837,6 +854,46 @@ function addAiBooks(){
   } else {
     toast('这些书已经在书单里了');
   }
+}
+
+/* ---------- 从家长的话里识别要移除的书名 ---------- */
+function extractRemoveTargets(text){
+  const targets = [];
+  const push = (s) => {
+    if(!s) return;
+    const v = s.replace(/《|》/g,'').trim();
+    if(v && !targets.includes(v)) targets.push(v);
+  };
+  let m;
+  // 把《X》去掉 / 把 X 去掉 / 把 X 不要
+  const re1 = /把\s*(《[^》]+》|[^，,。!?？！\s]{1,20})\s*(?:去掉|移除|删除|删掉|不要)/g;
+  while((m = re1.exec(text))) push(m[1]);
+  // 去掉《X》 / 去掉 X
+  const re2 = /(?:去掉|移除|删除|删掉)\s*(《[^》]+》|[^，,。!?？！\s]{1,20})/g;
+  while((m = re2.exec(text))) push(m[1]);
+  // 《X》不要 / 《X》去掉
+  const re3 = /《([^》]+)》(?:不要|去掉|移除|删除|删掉)/g;
+  while((m = re3.exec(text))) push(m[1]);
+  // 不要 X / X 不要了
+  const re4 = /(?:不要|去掉|移除|删除|删掉)\s*([^，,。!?？！\s]{1,20})/g;
+  while((m = re4.exec(text))) push(m[1]);
+  return targets;
+}
+
+function removeBooksFromText(text){
+  const targets = extractRemoveTargets(text);
+  const removed = [];
+  for(const t of targets){
+    const idx = BOOKS.findIndex(b => b.title.includes(t) || t.includes(b.title));
+    if(idx >= 0){
+      const [b] = BOOKS.splice(idx, 1);
+      for(let i = planBookIds.length - 1; i >= 0; i--){
+        if(planBookIds[i] === b.id) planBookIds.splice(i, 1);
+      }
+      removed.push(b.title);
+    }
+  }
+  return removed;
 }
 
 function toggleBookForm(){
@@ -905,6 +962,7 @@ function bookCard(b){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:11px;gap:10px">
         <span class="tag indigo" style="font-size:10.5px">📖 ${b.chapters.length} 章</span>
         <button class="btn sm ${isInPlan(b.id)?'ghost':'mint'}" style="width:auto;padding:7px 13px;font-size:11.5px;flex:none" onclick="addToPlan('${b.id}')">${isInPlan(b.id)?'✓ 已加入计划清单':'加入计划清单'}</button>
+        <button class="btn sm ghost" style="width:auto;padding:7px 13px;font-size:11.5px;flex:none" onclick="removeBook('${b.id}')">移除</button>
       </div>
     </div>
   </div>`;
