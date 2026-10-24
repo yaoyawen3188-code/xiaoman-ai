@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小满伴学 · AI陪伴学习硬件 MVP 原型</title>
+<style>
+:root{
+  --bg:#FBF6EF; --ink:#2A2520; --muted:#8B8275; --card:#FFFFFF; --line:#ECE3D8;
+  --primary:#FF6B5E; --primary-soft:#FFE8E4;
+  --mint:#2FB39E; --mint-soft:#E0F6F2;
+  --amber:#F5A623; --amber-soft:#FFF3DF;
+  --indigo:#6C63FF; --indigo-soft:#ECEAFE;
+  --pink:#FF8FA3; --blue:#4A90E2; --success:#3FB57B; --danger:#E2574C;
+  --radius:22px; --shadow:0 18px 50px -24px rgba(58,40,24,.35);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink)}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;line-height:1.55;font-size:14px;
+}
+.page{max-width:1180px;margin:0 auto;padding:56px 28px 80px}
+.kicker{display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.14em;color:var(--primary);font-weight:700;text-transform:uppercase}
+.kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--primary)}
+h1{font-size:38px;line-height:1.15;margin:14px 0 10px;letter-spacing:-.02em;font-weight:800}
+.lede{font-size:15px;color:var(--muted);max-width:680px;margin-bottom:30px}
+.note{background:#FFF8EE;border:1px solid #F2E2C6;border-radius:16px;padding:14px 16px;font-size:13px;color:#7A6A48;margin:22px 0 0}
+.note b{color:#B26A1E}
+.flow{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
+.chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:12px;color:#6B6152;font-weight:600}
+.chip b{color:var(--ink)}
+
+/* ---- phone shell ---- */
+.stage{display:flex;gap:56px;justify-content:center;margin-top:44px;flex-wrap:wrap}
+.phone-label{text-align:center;font-size:12.5px;font-weight:800;color:#8B8275;margin-bottom:12px;letter-spacing:.04em}
+.phone{width:390px;height:844px;background:#1C1A17;border-radius:52px;padding:12px;box-shadow:var(--shadow);position:relative}
+.phone::before{content:"";position:absolute;top:18px;left:50%;transform:translateX(-50%);width:116px;height:32px;background:#1C1A17;border-radius:18px;z-index:6}
+.screen{width:100%;height:100%;background:var(--bg);border-radius:42px;overflow:hidden;position:relative;display:flex;flex-direction:column}
+.statusbar{height:50px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 28px 8px;font-size:12px;font-weight:700;color:var(--ink);flex:none;position:relative;z-index:2}
+.statusbar .icons{display:flex;gap:5px;align-items:center}
+.statusbar svg{width:16px;height:16px}
+.body{flex:1;overflow-y:auto;position:relative}
+.body::-webkit-scrollbar{width:0}
+.homebar{height:24px;display:flex;justify-content:center;align-items:center;flex:none}
+.homebar span{width:118px;height:5px;border-radius:5px;background:#2A2520;opacity:.28}
+.tabbar{height:72px;flex:none;background:rgba(255,255,255,.92);backdrop-filter:blur(14px);border-top:1px solid var(--line);display:flex;justify-content:space-around;align-items:center;padding-bottom:14px}
+.tab{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--muted);cursor:pointer;transition:color .18s}
+.tab .ico{width:24px;height:24px;opacity:.75}
+.tab.active{color:var(--primary)}
+.tab.active .ico{opacity:1}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="kicker"><span class="dot"></span>CBG 硬件创新路演 · 软件原型 MVP</div>
+  <h1>小满伴学 · 家长端 App 与设备端原型</h1>
+  <p class="lede">面向「AI 陪伴学习硬件」的 MVP 交互原型，重点覆盖两条主流程：扫码绑定设备、家长用语音与 AI 对话采集孩子档案并确认学习计划。右侧是可点击的原型演示。</p>
+  <div class="note"><b>先看这里 · 两个问题的结论</b><br>1. 绑定方式：主流做法确实是「App 扫码绑定」——设备开机后在屏幕上显示二维码 / 配对码，家长 App 扫码或输入配对码完成绑定，同时可用蓝牙辅助发现。原型已按此设计（见「绑定设备」屏）。<br>2. 计划确认：已设计成 AI 语音对话式确认。家长语音输入孩子年龄、年级、性别、兴趣、兴趣班与培养期望，AI 输出四大学习方向（阅读 / 计算 / 口语 / 其他），再通过对话逐项确认时长与内容，最后下发到设备。</p></div>
+  <div class="flow">
+    <span class="chip"><b>①</b> 扫码绑定设备</span>
+    <span class="chip"><b>②</b> 学习计划制定</span>
+    <span class="chip"><b>③</b> AI 生成学习方向</span>
+    <span class="chip"><b>④</b> AI 对话确认计划</span>
+    <span class="chip"><b>⑤</b> 每日任务下发</span>
+    <span class="chip"><b>⑥</b> 学习验收与积分</span>
+  </div>
+  <div class="stage">
+    <div>
+      <div class="phone-label">家长端 · 小满伴学 App</div>
+      <div class="phone">
+        <div class="screen" id="screen">
+          <div class="statusbar">
+            <span>9:41</span>
+            <span class="icons">
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 11h2v2H2zm3-3h2v5H5zm3-3h2v8H8zm3-3h2v11h-2z"/></svg>
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5l5 4.2-1.2 1.6-3.8-3.2-3.8 3.2L3 5.7z"/></svg>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="4" width="11" height="8" rx="2"/><rect x="13" y="6" width="1.4" height="4" rx=".7" fill="currentColor" stroke="none"/><rect x="2.5" y="5.5" width="7" height="5" rx="1" fill="currentColor" stroke="none"/></svg>
+            </span>
+          </div>
+          <div class="body" id="screenBody"></div>
+          <div class="homebar"><span></span></div>
+          <div class="tabbar" id="tabbar"></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="phone-label">设备端 · 小满伴学</div>
+      <div class="phone">
+        <div class="screen" id="devScreen">
+          <div class="statusbar">
+            <span>9:41</span>
+            <span class="icons">
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 11h2v2H2zm3-3h2v5H5zm3-3h2v8H8zm3-3h2v11h-2z"/></svg>
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5l5 4.2-1.2 1.6-3.8-3.2-3.8 3.2L3 5.7z"/></svg>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="4" width="11" height="8" rx="2"/><rect x="13" y="6" width="1.4" height="4" rx=".7" fill="currentColor" stroke="none"/><rect x="2.5" y="5.5" width="7" height="5" rx="1" fill="currentColor" stroke="none"/></svg>
+            </span>
+          </div>
+          <div class="body" id="devBody"></div>
+          <div class="homebar"><span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<style>
+/* screen shells */
+.wrap{padding:0 20px 26px;position:relative;min-height:100%}
+.head{display:flex;align-items:center;gap:12px;padding:6px 20px 16px}
+.back{width:34px;height:34px;border-radius:11px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;cursor:pointer;font-size:15px;color:var(--ink);flex:none}
+.head h2{font-size:17px;font-weight:800;letter-spacing:-.01em}
+.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.hero{background:linear-gradient(135deg,#FFE8E4,#FFF3DF);border-radius:0 0 26px 26px;padding:16px 22px 22px}
+.hero h3{font-size:20px;font-weight:800;letter-spacing:-.01em}
+.hero p{font-size:12.5px;color:#7A6A58;margin-top:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;box-shadow:0 10px 26px -20px rgba(58,40,24,.28)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:15px;padding:13px 20px;font-size:14.5px;font-weight:700;color:#fff;background:var(--primary);cursor:pointer;transition:transform .12s,filter .12s;width:100%}
+.btn:active{transform:scale(.98)}
+.btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.btn.sm{width:auto;padding:9px 16px;font-size:12.5px}
+.btn.mint{background:var(--mint)} .btn.amber{background:var(--amber)} .btn.indigo{background:var(--indigo)}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px}
+.tag.mint{background:var(--mint-soft);color:var(--mint)} .tag.amber{background:var(--amber-soft);color:var(--amber)}
+.tag.coral{background:var(--primary-soft);color:var(--primary)} .tag.indigo{background:var(--indigo-soft);color:var(--indigo)}
+.icon{width:26px;height:26px;border-radius:9px;display:grid;place-items:center;font-size:14px;flex:none}
+.icon.mint{background:var(--mint-soft);color:var(--mint)} .icon.amber{background:var(--amber-soft);color:var(--amber)}
+.icon.coral{background:var(--primary-soft);color:var(--primary)} .icon.indigo{background:var(--indigo-soft);color:var(--indigo)}
+
+/* chat */
+.chat{display:flex;flex-direction:column;gap:12px;padding:0 16px 16px}
+.msg{max-width:82%;padding:11px 14px;border-radius:18px;font-size:13.5px;line-height:1.5;position:relative}
+.msg.ai{background:var(--card);border:1px solid var(--line);border-bottom-left-radius:6px;align-self:flex-start}
+.msg.user{background:var(--primary);color:#fff;border-bottom-right-radius:6px;align-self:flex-end;white-space:pre-wrap}
+.msg .who{font-size:10px;font-weight:700;opacity:.6;margin-bottom:3px;letter-spacing:.04em}
+.msg .voice-hint{font-size:10px;opacity:.7;margin-top:4px}
+.inputbar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:9px;align-items:center;padding:12px 16px 26px;background:linear-gradient(to top,var(--bg) 62%,transparent)}
+.inputbar .textbox{flex:1;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:11px 14px;font-size:13.5px;font-family:inherit;color:var(--ink);outline:none}
+.mic{width:42px;height:42px;border-radius:14px;border:0;background:var(--primary);color:#fff;display:grid;place-items:center;cursor:pointer;flex:none}
+.mic.rec{background:var(--danger);animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(226,87,76,.5)}50%{box-shadow:0 0 0 12px rgba(226,87,76,0)}}
+
+/* directions */
+.dir-card{display:flex;gap:13px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:15px;margin-bottom:12px}
+.dir-card .body{flex:1;min-width:0}
+.dir-card h4{font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px}
+.dir-card p{font-size:12.5px;color:var(--muted);margin-top:5px}
+.dir-card .meta{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+
+/* tasks */
+.task{display:flex;gap:13px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:11px}
+.task .t-body{flex:1;min-width:0}
+.task h4{font-size:14.5px;font-weight:700;display:flex;align-items:center;gap:7px}
+.task p{font-size:12px;color:var(--muted);margin-top:3px}
+.task .time{font-size:11px;color:var(--muted);font-weight:700;margin-top:6px}
+.task .check{width:24px;height:24px;border-radius:8px;border:2px solid var(--line);display:grid;place-items:center;flex:none;cursor:pointer;color:transparent;transition:.15s}
+.task.done .check{background:var(--success);border-color:var(--success);color:#fff}
+.task.done .t-body h4{color:var(--muted)}
+.task.done{opacity:.75}
+
+/* books */
+.book{display:flex;gap:13px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:11px;cursor:pointer;transition:transform .12s}
+.book:active{transform:scale(.99)}
+.book.read{opacity:.72}
+.book.read .bk-icon{filter:grayscale(.6);opacity:.6}
+.book.read .nm{color:var(--muted);text-decoration:line-through}
+.bk-icon{width:46px;height:46px;border-radius:14px;background:var(--mint-soft);color:var(--mint);display:grid;place-items:center;font-size:22px;flex:none}
+.bk-body{flex:1;min-width:0}
+.book .nm{font-weight:800;font-size:14.5px}
+.book .reason{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
+.book .meta{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+.book .status{font-size:10.5px;font-weight:700;padding:4px 8px;border-radius:999px}
+.book .status.read{background:var(--mint-soft);color:var(--mint)}
+.book .status.unread{background:var(--amber-soft);color:var(--amber)}
+.book .dur{font-size:11px;font-weight:700;color:var(--ink);background:#F5EFE6;padding:4px 8px;border-radius:999px}
+.chk{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.chk:last-child{border-bottom:0}
+.chk-box{width:22px;height:22px;border-radius:7px;border:2px solid var(--line);display:grid;place-items:center;flex:none;font-size:13px;color:transparent;transition:.15s}
+.chk.done .chk-box{background:var(--success);border-color:var(--success);color:#fff}
+.chk.done div{color:var(--muted);text-decoration:line-through}
+
+/* photo tiles */
+.photo-tile{flex:1;border-radius:14px;background:linear-gradient(135deg,#FFE8E4,#F0E8DC);padding:14px 8px 12px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:22px;cursor:pointer;transition:transform .12s}
+.photo-tile:active{transform:scale(.97)}
+.photo-tile span{font-size:11px;font-weight:700;color:var(--ink)}
+.photo-tile i{font-style:normal;font-size:10px;color:var(--muted);text-align:center}
+
+/* timeline */
+.tl{position:relative;margin:16px 0 0;padding-left:4px}
+.tl-item{position:relative;display:flex;gap:12px;padding:0 0 14px 8px}
+.tl-item::before{content:"";position:absolute;left:11px;top:30px;bottom:2px;width:2px;background:var(--line)}
+.tl-item:last-child::before{display:none}
+.tl-dot{width:14px;height:14px;border-radius:50%;flex:none;margin-top:5px;background:var(--card);border:3px solid var(--line);z-index:1}
+.tl-item.study .tl-dot{border-color:var(--primary);background:var(--primary)}
+.tl-item.life .tl-dot{border-color:#D8CFC1}
+.tl-time{font-size:10.5px;font-weight:800;color:var(--muted);width:80px;flex:none;padding-top:6px;letter-spacing:.01em;text-align:right}
+.tl-card{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:11px 13px;display:flex;align-items:center;gap:12px}
+.tl-item.life .tl-card{background:#FAF5EC;border-style:dashed}
+.tl-card .ic{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;font-size:17px;flex:none}
+.tl-item.study .ic{background:var(--primary-soft);color:var(--primary)}
+.tl-item.life .ic{background:#F0E8DC;color:#9B8E7B}
+.tl-card .nm{font-weight:700;font-size:13.5px}
+.tl-card .ds{font-size:11.5px;color:var(--muted);margin-top:2px}
+.tl-card .ck{width:22px;height:22px;border-radius:7px;border:2px solid var(--line);display:grid;place-items:center;flex:none;cursor:pointer;color:transparent;transition:.15s}
+.tl-item.study.done .ck{background:var(--success);border-color:var(--success);color:#fff}
+.tl-item.study.done .tl-card .nm{color:var(--muted);text-decoration:line-through}
+.tl-item.study .ck{display:grid}
+.tl-item.life .ck{display:none}
+
+/* progress */
+.prog{height:8px;background:#F0E8DC;border-radius:99px;overflow:hidden}
+.prog i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--primary),var(--amber))}
+
+/* quiz */
+.quiz{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;margin-bottom:12px}
+.quiz h4{font-size:14px;font-weight:800}
+.quiz .q{font-size:12.5px;color:#7A6A58;margin:8px 0 10px}
+.quiz .opts{display:flex;flex-direction:column;gap:8px}
+.opt{border:1.5px solid var(--line);border-radius:13px;padding:11px 13px;font-size:13px;cursor:pointer;background:#fff}
+.opt:active{transform:scale(.99)}
+.opt.correct{border-color:var(--success);background:#EAF8F0}
+
+/* points */
+.pts{background:linear-gradient(135deg,#FFE8E4,#FFF3DF);border-radius:22px;padding:20px;text-align:center;margin-bottom:14px}
+.pts .big{font-size:38px;font-weight:800;letter-spacing:-.02em}
+.pts .lab{font-size:12px;color:#7A6A58;font-weight:600}
+.reward{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:13px;margin-bottom:9px}
+
+/* scan */
+.scan-box{margin:20px 0;border-radius:22px;overflow:hidden;position:relative;background:#1C1A17;height:230px;display:grid;place-items:center}
+.scan-box .qr{width:130px;height:130px;background:#fff;border-radius:18px;display:grid;place-items:center;box-shadow:0 20px 40px -20px rgba(0,0,0,.6)}
+.scan-box .qr svg{width:108px;height:108px}
+.scanline{position:absolute;left:8%;right:8%;height:2px;background:linear-gradient(90deg,transparent,var(--primary),transparent);box-shadow:0 0 14px 3px var(--primary);top:0;animation:scan 2.2s ease-in-out infinite}
+@keyframes scan{0%,100%{top:8%}50%{top:88%}}
+.pair-input{display:flex;gap:8px;margin:12px 0}
+.pair-input input{flex:1;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:14px;font-family:inherit;outline:none;letter-spacing:.3em}
+.device-found{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;margin-top:14px;display:flex;align-items:center;gap:13px}
+.device-found .name{font-weight:800;font-size:15px}
+.device-found .mac{font-size:11px;color:var(--muted)}
+
+/* device screens */
+.dev-hero{background:linear-gradient(135deg,#6C63FF,#FF6B5E);color:#fff;padding:22px 20px;border-radius:0 0 24px 24px}
+.dev-hero h3{font-size:19px;font-weight:800}
+.dev-hero p{font-size:12.5px;opacity:.9;margin-top:3px}
+.dev-card{background:#fff;border-radius:20px;padding:15px;margin-top:12px;display:flex;align-items:center;gap:13px}
+.play{width:44px;height:44px;border-radius:15px;background:var(--primary);color:#fff;display:grid;place-items:center;flex:none}
+.audio-wave{display:flex;align-items:center;gap:3px;height:26px}
+.audio-wave i{width:3px;background:var(--mint);border-radius:3px;animation:wave 1s infinite ease-in-out}
+.audio-wave i:nth-child(1){height:10px;animation-delay:0s}
+.audio-wave i:nth-child(2){height:22px;animation-delay:.15s}
+.audio-wave i:nth-child(3){height:14px;animation-delay:.3s}
+.audio-wave i:nth-child(4){height:24px;animation-delay:.45s}
+.audio-wave i:nth-child(5){height:12px;animation-delay:.6s}
+@keyframes wave{0%,100%{transform:scaleY(.5)}50%{transform:scaleY(1.6)}}
+.star-badge{background:linear-gradient(135deg,#FFB020,#FF8FA3);color:#fff;border-radius:16px;padding:16px;text-align:center;margin-top:12px}
+.star-badge .s{font-size:22px}
+.mascot{width:74px;height:74px;border-radius:24px;background:linear-gradient(135deg,#FFE8E4,#FFF3DF);display:grid;place-items:center;font-size:34px;box-shadow:inset 0 0 0 1px #F2E2C6}
+.nav-dots{display:flex;gap:6px;justify-content:center;margin:6px 0 2px}
+.nav-dots span{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.nav-dots span.on{background:var(--primary);width:20px;border-radius:99px}
+.fade{animation:fade .35s ease}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#2A2520;color:#fff;padding:11px 18px;border-radius:14px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:99;box-shadow:0 14px 30px -12px rgba(0,0,0,.4);max-width:80vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+<script>
+/* ---------- 状态 ---------- */
+const body = document.getElementById('screenBody');
+const tabbar = document.getElementById('tabbar');
+const devBody = document.getElementById('devBody');
+let stack = ['welcome'];
+let micOn = false;
+let deviceScreen = 'home';
+let bound = false;
+let cloneVoice = null;
+let hwMode = 'text';
+let totalPoints = 1280;
+let chatHistory = [];
+let streaming = false;
+let checkQStreaming = false;
+
+/* ---------- 图标 ---------- */
+const ICON = {
+  home:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
+  plan:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6v3H9z"/><path d="M6 6h12v14H6z"/><path d="M9 13l2 2 4-5"/></svg>',
+  check:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>',
+  collect:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/></svg>',
+  me:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>'
+};
+const TABS = [
+  {key:'welcome', label:'首页', svg:ICON.home},
+  {key:'profile', label:'伴学', svg:ICON.collect},
+  {key:'directions', label:'计划', svg:ICON.plan},
+  {key:'check', label:'验收', svg:ICON.check},
+  {key:'me', label:'我的', svg:ICON.me}
+];
+
+/* ---------- 导航 ---------- */
+function push(name){ stack.push(name); render(); }
+function goBack(){ if(stack.length<=1){ stack=['welcome']; } else { stack.pop(); } render(); }
+function goto(name){ stack = [name]; render(); }
+function render(){
+  const name = stack[stack.length-1];
+  body.innerHTML = SCRENS[name]();
+  body.scrollTop = 0;
+  renderTabs();
+  if (name==='profile') bindMic(body.querySelector('.mic'));
+  if (name==='confirm') bindMic(body.querySelector('.mic'));
+  const ti = body.querySelector('.textbox');
+  if(ti) ti.onkeydown = (e)=>{ if(e.key==='Enter') sendText(ti); };
+  body.classList.remove('fade'); void body.offsetWidth; body.classList.add('fade');
+}
+
+async function sendText(input){
+  const v = input.value.trim();
+  if(!v || streaming) return;
+  const chat = document.querySelector('.chat');
+  if(!chat) return;
+
+  // 家长消息
+  const d = document.createElement('div');
+  d.className = 'msg user';
+  const who = document.createElement('div'); who.className = 'who'; who.textContent = '家长 · 文字';
+  const p = document.createElement('div'); p.textContent = v;
+  d.appendChild(who); d.appendChild(p);
+  chat.appendChild(d);
+  input.value = '';
+  chat.scrollTop = chat.scrollHeight;
+
+  // AI 占位
+  const ai = document.createElement('div');
+  ai.className = 'msg ai';
+  const aiWho = document.createElement('div'); aiWho.className = 'who'; aiWho.textContent = '小满 · AI 助手';
+  const aiContent = document.createElement('div'); aiContent.className = 'ai-content'; aiContent.textContent = '小满正在思考…';
+  ai.appendChild(aiWho); ai.appendChild(aiContent);
+  chat.appendChild(ai);
+  chat.scrollTop = chat.scrollHeight;
+
+  chatHistory.push({ role: 'user', content: v });
+  streaming = true;
+
+  const scrollChat = () => { chat.scrollTop = chat.scrollHeight; };
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: chatHistory })
+    });
+    if(!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let full = '';
+
+    while(true){
+      const { done, value } = await reader.read();
+      if(done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while((idx = buffer.indexOf('\n')) >= 0){
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        if(line.startsWith('data:')){
+          const data = line.slice(5).trim();
+          if(data === '[DONE]') continue;
+          try {
+            const obj = JSON.parse(data);
+            if(obj.error){
+              aiContent.textContent = '⚠️ ' + obj.error;
+              scrollChat();
+            } else if(obj.delta){
+              full += obj.delta;
+              aiContent.textContent = full;
+              scrollChat();
+            }
+          } catch(e){}
+        }
+      }
+    }
+
+    if(!full){
+      aiContent.textContent = aiContent.textContent || '（未收到回复内容）';
+    }
+    chatHistory.push({ role: 'assistant', content: full || aiContent.textContent });
+  } catch(err){
+    aiContent.textContent = '⚠️ AI 服务暂时无法连接，请稍后重试或检查后端是否已部署。';
+    scrollChat();
+  } finally {
+    streaming = false;
+    scrollChat();
+  }
+}
+function renderTabs(){
+  const cur = stack[stack.length-1];
+  tabbar.innerHTML = TABS.map(t=>`<div class="tab ${t.key===cur?'active':''}" onclick="goto('${t.key}')">${t.svg}<span>${t.label}</span></div>`).join('');
+}
+
+/* ---------- 语音按钮 ---------- */
+function bindMic(el){
+  if(!el) return;
+  el.onclick = ()=>{
+    micOn = !micOn;
+    el.classList.toggle('rec', micOn);
+    if(micOn){
+      const hint = document.querySelector('.mic-hint');
+      if(hint) hint.textContent = '正在聆听… 请说话';
+    } else {
+      const hint = document.querySelector('.mic-hint');
+      if(hint) hint.textContent = '语音已识别 ✓';
+    }
+  };
+}
+
+/* ---------- QR ---------- */
+function qrSVG(){
+  let c='';
+  for(let y=0;y<10;y++) for(let x=0;x<10;x++) if(((x*7+y*3)%3)!==0) c+=`<rect x="${x*10}" y="${y*10}" width="10" height="10"/>`;
+  const f=(x,y)=>`<rect x="${x}" y="${y}" width="20" height="20"/><rect x="${x+5}" y="${y+5}" width="10" height="10" fill="#fff"/><rect x="${x+8}" y="${y+8}" width="4" height="4"/>`;
+  return `<svg viewBox="0 0 100 100" fill="#1C1A17">${c}${f(5,5)}${f(65,5)}${f(5,65)}</svg>`;
+}
+
+/* ---------- 屏幕 ---------- */
+const SCRENS = {};
+
+SCRENS.welcome = ()=>`
+<div class="wrap fade" style="padding-top:44px">
+  <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:30px">
+    <div class="mascot" style="width:88px;height:88px;font-size:40px">🤖</div>
+    <div style="font-size:22px;font-weight:800;margin-top:16px">小满伴学</div>
+    <div style="font-size:12.5px;color:var(--muted);margin-top:4px">AI 陪伴学习 · 从今天开始</div>
+  </div>
+  <div class="card" style="display:flex;gap:13px;align-items:center;cursor:pointer;margin-bottom:12px" onclick="${bound?`goto('status')`:`goto('bind')`}">
+    <div class="icon coral" style="width:44px;height:44px;font-size:22px">${bound?'📊':'🤖'}</div>
+    <div style="flex:1"><b style="font-size:15px">${bound?'查看学习状态':'扫码绑定设备'}</b><p style="font-size:12px;color:var(--muted);margin:2px 0 0">${bound?'AI 总结今日学习情况':'把「小满」带到孩子身边'}</p></div>
+    <div style="color:var(--muted);font-size:18px">›</div>
+  </div>
+  <div class="card" style="display:flex;gap:13px;align-items:center;cursor:pointer;margin-bottom:12px" onclick="goto('profile')">
+    <div class="icon mint" style="width:44px;height:44px;font-size:22px">🎯</div>
+    <div style="flex:1"><b style="font-size:15px">学习计划制定</b><p style="font-size:12px;color:var(--muted);margin:2px 0 0">语音采集档案 · 生成每日计划</p></div>
+    <div style="color:var(--muted);font-size:18px">›</div>
+  </div>
+  <div class="card" style="display:flex;gap:13px;align-items:center;cursor:pointer" onclick="goto('home')">
+    <div class="icon amber" style="width:44px;height:44px;font-size:22px">📋</div>
+    <div style="flex:1"><b style="font-size:15px">今日计划</b><p style="font-size:12px;color:var(--muted);margin:2px 0 0">查看子涵的晚间任务</p></div>
+    <div style="color:var(--muted);font-size:18px">›</div>
+  </div>
+</div>`;
+
+SCRENS.bind = ()=>`
+<div class="wrap fade">
+  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>绑定设备</h2><span></span></div>
+  <div class="hero"><h3>把「小满」带到孩子身边</h3><p>扫描设备屏幕上的二维码，或输入配对码，即可完成绑定。</p></div>
+  <div class="scan-box"><div class="qr">${qrSVG()}</div><div class="scanline"></div></div>
+  <button class="btn" onclick="foundDevice()">扫码绑定</button>
+  <button class="btn ghost" style="margin-top:10px" onclick="showPair()">输入配对码</button>
+  <div id="pairArea"></div>
+  <div id="foundArea"></div>
+  <div style="height:16px"></div>
+</div>`;
+
+function showPair(){
+  document.getElementById('pairArea').innerHTML = `
+  <div class="card" style="margin-top:14px">
+    <div style="font-weight:800;margin-bottom:10px">设备配对码</div>
+    <div class="pair-input"><input id="pairCode" placeholder="例如 4827"></div>
+    <button class="btn sm" onclick="foundDevice()">确认配对</button>
+  </div>`;
+}
+function foundDevice(){
+  document.getElementById('foundArea').innerHTML = `
+  <div class="device-found">
+    <div class="mascot">🤖</div>
+    <div style="flex:1">
+      <div class="name">小满伴学 · 0321</div>
+      <div class="mac">已发现设备 · 电量 98% · 在线</div>
+    </div>
+    <button class="btn sm" onclick="confirmBind()">确认绑定</button>
+  </div>`;
+}
+
+function confirmBind(){
+  bound = true;
+  goto('profile');
+}
+
+function setCloneVoice(name){
+  cloneVoice = name;
+  toast('已切换为：'+name);
+  render();
+}
+
+SCRENS.profile = ()=>`
+<div class="wrap fade" style="padding-bottom:80px">
+  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>AI 伴学 · 定制专属学习目标</h2></div>
+  <div class="chat">
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>你好呀～我是「小满」🌱<br>为了给<b>子涵</b>制定科学计划，我会用语音逐项采集：<b>年龄、年级、性别、兴趣（IP / 人物 / 音乐 / 书籍）、兴趣班、培养期望</b>。按下方麦克风说话即可，也能打字补充。</div>
+    <div class="msg user"><div class="who">家长 · 语音</div>孩子8岁，二年级，男孩。<div class="voice-hint">第 1 步 · 年龄 / 年级 / 性别</div></div>
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>收到～平时喜欢哪些 IP、人物、音乐或书籍？现在在上什么兴趣班？</div>
+    <div class="msg user"><div class="who">家长 · 语音</div>喜欢奥特曼和汪汪队，爱看《神奇校车》，在上钢琴和围棋班。<div class="voice-hint">第 2 步 · 兴趣 / IP / 兴趣班</div></div>
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>太棒了！最后，你希望重点培养哪方面？阅读、计算、口语，还是全面发展？</div>
+    <div class="msg user"><div class="who">家长 · 语音</div>希望阅读和口语加强，数学保持就好。<div class="voice-hint">第 3 步 · 培养期望</div></div>
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>好嘞，子涵的档案已整理 ✅<br>接下来我会给出 <b>阅读 / 计算 / 口语陪练 / 其他</b> 四个学习方向，你确认后我就生成每日计划。</div>
+  </div>
+  <button class="btn" style="margin:14px 16px 0" onclick="goto('directions')">下一步 · 查看学习方向 →</button>
+  <div class="inputbar">
+    <button class="mic" onclick="toggleMic(this)"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
+    <input class="textbox" placeholder="或文字补充…">
+  </div>
+</div>`;
+
+function toggleMic(el){
+  micOn = !micOn;
+  el.classList.toggle('rec', micOn);
+}
+
+/* ---------- 兴趣书单（基于孩子档案个性化推荐） ---------- */
+const BOOKS = [
+  {id:'bk1', icon:'📖', title:'《神奇校车·水的故事》', author:'乔安娜·柯尔', duration:25,
+   reason:'子涵已经喜欢《神奇校车》，从熟悉题材切入，科学分级阅读，培养好奇心与专注力。',
+   chapters:[
+     {t:'第 1 章 · 魔法校车变小了', done:true},
+     {t:'第 2 章 · 进入人体肠胃', done:true},
+     {t:'第 3 章 · 血液循环之旅', done:true},
+     {t:'第 4 章 · 水的故事', done:false},
+     {t:'第 5 章 · 云和雨的由来', done:false},
+     {t:'第 6 章 · 总结与小问答', done:false}
+   ]},
+  {id:'bk2', icon:'🐶', title:'《汪汪队立大功·安全救援故事集》', author:'尼克国际儿童频道', duration:20,
+   reason:'结合子涵喜欢的汪汪队 IP，把「看动画」变成「读故事」，提升主动阅读兴趣。',
+   chapters:[
+     {t:'第 1 章 · 汪汪队集合', done:false},
+     {t:'第 2 章 · 狗狗救援行动', done:false},
+     {t:'第 3 章 · 道路安全小课堂', done:false},
+     {t:'第 4 章 · 消防与冒险', done:false},
+     {t:'第 5 章 · 团队的力量', done:false}
+   ]},
+  {id:'bk3', icon:'🛸', title:'《奥特曼儿童科幻故事》', author:'圆谷制作', duration:20,
+   reason:'子涵喜欢奥特曼，用熟悉的 IP 降低阅读门槛，同时培养想象力与正义感。',
+   chapters:[
+     {t:'第 1 章 · 光之巨人登场', done:false},
+     {t:'第 2 章 · 怪兽来了', done:false},
+     {t:'第 3 章 · 奥特曼的战斗', done:false},
+     {t:'第 4 章 · 守护地球', done:false}
+   ]},
+  {id:'bk4', icon:'🐠', title:'《神奇校车·海底探险》', author:'乔安娜·柯尔', duration:25,
+   reason:'《神奇校车》系列延伸，从水的故事进入海洋世界，延续科学探索兴趣。',
+   chapters:[
+     {t:'第 1 章 · 下潜到海底', done:false},
+     {t:'第 2 章 · 遇到海洋生物', done:false},
+     {t:'第 3 章 · 海底火山', done:false},
+     {t:'第 4 章 · 回到水面', done:false},
+     {t:'第 5 章 · 海洋小问答', done:false}
+   ]},
+  {id:'bk5', icon:'🔬', title:'《DK 儿童动物百科》', author:'DK 出版社', duration:15,
+   reason:'结合子涵对世界的好奇心，用图鉴式科普拓展非虚构阅读面。',
+   chapters:[
+     {t:'第 1 章 · 哺乳动物', done:false},
+     {t:'第 2 章 · 鸟类', done:false},
+     {t:'第 3 章 · 鱼类与两栖类', done:false},
+     {t:'第 4 章 · 动物小问答', done:false}
+   ]}
+];
+
+let currentBookId = '';
+const planBookIds = [];
+
+function isInPlan(id){ return planBookIds.includes(id); }
+
+function addToPlan(id){
+  const b = BOOKS.find(x=>x.id===id);
+  if(!b) return;
+  if(planBookIds.includes(id)){
+    toast(`《${b.title}》已在计划清单中`);
+    return;
+  }
+  planBookIds.push(id);
+  toast(`《${b.title}》已加入计划清单`);
+  render();
+}
+
+function fmtDuration(m){
+  if(m<=0) return '0 分钟';
+  const h = Math.floor(m/60), mm = m%60;
+  return h===0 ? `${mm} 分钟` : (mm===0 ? `${h} 小时` : `${h} 小时 ${mm} 分`);
+}
+
+function bookStats(){
+  const read = BOOKS.filter(b=>b.chapters.every(c=>c.done));
+  const totalRead = read.reduce((s,b)=>s+b.duration,0);
+  const readCount = read.length;
+  const doingCount = BOOKS.filter(b=>b.chapters.some(c=>c.done) && !b.chapters.every(c=>c.done)).length;
+  return { totalRead, readCount, doingCount };
+}
+
+function refreshBooks(){
+  const btn = document.querySelector('.refresh-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '正在刷新…'; }
+  setTimeout(()=>{
+    for(let i=BOOKS.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [BOOKS[i],BOOKS[j]] = [BOOKS[j],BOOKS[i]];
+    }
+    render();
+    toast('已为你刷新推荐书单 ✓');
+  }, 700);
+}
+
+function bookCard(b){
+  const total = b.chapters.length;
+  const doneCount = b.chapters.filter(c=>c.done).length;
+  const allDone = doneCount === total;
+  const statusCls = doneCount>0 ? 'read' : 'unread';
+  const statusText = allDone ? '已读完' : (doneCount>0 ? `已读 ${doneCount}/${total} 章` : '未读');
+  const prog = Math.round(doneCount/total*100);
+  return `
+  <div class="book ${allDone?'read':''}" onclick="openBook('${b.id}')">
+    <div class="bk-icon">${b.icon}</div>
+    <div class="bk-body">
+      <div class="nm">${b.title}</div>
+      <div class="reason">${b.reason}</div>
+      ${doneCount>0 && !allDone ? `<div class="prog" style="margin-top:9px"><i style="width:${prog}%"></i></div>` : ''}
+      <div class="meta">
+        <span class="status ${statusCls}">${statusText}</span>
+        <span class="dur">⏱ ${b.duration} 分钟</span>
+        <span class="tag mint" style="font-size:10.5px;margin-left:auto">推荐</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:11px;gap:10px">
+        <span class="tag indigo" style="font-size:10.5px">📖 ${b.chapters.length} 章</span>
+        <button class="btn sm ${isInPlan(b.id)?'ghost':'mint'}" style="width:auto;padding:7px 13px;font-size:11.5px;flex:none" onclick="addToPlan('${b.id}')">${isInPlan(b.id)?'✓ 已加入计划清单':'加入计划清单'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function openBook(id){
+  currentBookId = id;
+  push('bookDetail');
+}
+
+function toggleChapter(bookId, idx){
+  const b = BOOKS.find(x=>x.id===bookId);
+  if(!b) return;
+  b.chapters[idx].done = !b.chapters[idx].done;
+  render();
+}
+
+SCRENS.status = ()=>`
+<div class="wrap fade">
+  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>查看学习状态</h2><span class="tag mint">AI 总结</span></div>
+  <div class="hero"><h3>子涵 · 今日学习总结</h3><p>基于作业、阅读等拍照结果，AI 自动整理 · 10月23日</p></div>
+  <div class="card" style="background:linear-gradient(135deg,#FFE8E4,#FFF3DF);border-color:#F2E2C6">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-weight:800;font-size:13px;color:#B26A1E">📊 今日学习</div>
+      <div style="font-size:12px;font-weight:800;color:#B26A1E">⭐⭐⭐⭐ 优秀</div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:800">55<span style="font-size:12px;color:#7A6A58">分</span></div><div style="font-size:10.5px;color:#7A6A58">学习时长</div></div>
+      <div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:800">96<span style="font-size:12px;color:#7A6A58">%</span></div><div style="font-size:10.5px;color:#7A6A58">作业正确率</div></div>
+      <div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:800">4<span style="font-size:12px;color:#7A6A58">项</span></div><div style="font-size:10.5px;color:#7A6A58">已完成任务</div></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div style="font-weight:800;margin-bottom:8px">🤖 AI 今日学习总结</div>
+    <div style="font-size:13px;line-height:1.65;color:var(--ink)">
+      子涵今天完成度很高 🎉<br>
+      <b>📝 作业：</b>语文、数学作业均已拍照上传，AI 识别正确率 96%，书写工整。<br>
+      <b>📖 阅读：</b>《神奇校车·水的故事》读到第 4 章，阅读状态照片显示坐姿端正、专注度高。<br>
+      <b>🗣️ 口语：</b>完成「先听后说」15 分钟，跟读发音较昨日更自然。<br>
+      <b>🔢 计算：</b>口算 20 题全对，速度明显提升。<br>
+      <b>💡 小建议：</b>明天可尝试把阅读时间从 25 分钟延长到 30 分钟，继续保持。
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div style="font-weight:800;margin-bottom:10px">📸 拍照识别结果</div>
+    <div style="display:flex;gap:10px">
+      <div class="photo-tile">📝<span>作业拍照</span><i>AI识别完成 · 96%</i></div>
+      <div class="photo-tile">📖<span>阅读状态</span><i>专注 · 坐姿端正</i></div>
+      <div class="photo-tile">🗣️<span>口语跟读</span><i>发音自然</i></div>
+    </div>
+  </div>
+  <button class="btn mint" style="margin-top:14px" onclick="goto('home')">查看今日计划 →</button>
+  <button class="btn ghost" style="margin-top:10px" onclick="goto('directions')">生成明日学习计划</button>
+</div>`;
+
+SCRENS.directions = ()=>`
+<div class="wrap fade">
+  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>AI 学习方向</h2><span class="tag mint">已生成</span></div>
+  <div class="hero"><h3>子涵 · 每日计划候选</h3><p>基于年龄、兴趣与培养期望，AI 给出四个方向。计划安排在放学后 17:30-21:30，预留晚饭、休息与睡前洗漱时间。</p></div>
+  <div class="dir-card">
+    <div class="icon mint">📖</div>
+    <div class="body">
+      <h4>阅读能力</h4>
+      <p>符合年龄 + 兴趣的书单（如《神奇校车》系列），科学拆分每日阅读时间。</p>
+      <div class="meta"><span class="tag mint">每天 20 分钟</span><span class="tag coral">兴趣书单</span></div>
+      <button class="btn sm mint" style="margin-top:10px;width:auto;padding:8px 14px" onclick="push('reading')">查看书单 →</button>
+    </div>
+  </div>
+  <div class="dir-card">
+    <div class="icon amber">🔢</div>
+    <div class="body">
+      <h4>计算能力</h4>
+      <p>结合校内任务与口算练习，按兴趣安排每日时长，保持数学状态。</p>
+      <div class="meta"><span class="tag amber">每天 15 分钟</span><span class="tag indigo">校内同步</span></div>
+    </div>
+  </div>
+  <div class="dir-card">
+    <div class="icon coral">🗣️</div>
+    <div class="body">
+      <h4>口语陪练</h4>
+      <p>AI 按子涵英语水平扮演英语老师陪练，内容同步学校教材并适当扩展。</p>
+      <div class="meta"><span class="tag coral">每天 15 分钟</span><span class="tag indigo">学校教材同步</span><span class="tag mint">克隆音色</span></div>
+    </div>
+  </div>
+  <div class="dir-card">
+    <div class="icon indigo">🎹</div>
+    <div class="body">
+      <h4>其他 · 兴趣与习惯</h4>
+      <p>钢琴、围棋打卡，以及专注坐姿、屏幕时间等习惯培养。</p>
+      <div class="meta"><span class="tag indigo">每日打卡</span><span class="tag coral">可扩展</span></div>
+    </div>
+  </div>
+  <button class="btn" onclick="push('confirm')">进入计划确认</button>
+</div>`;
+
+SCRENS.confirm = ()=>`
+<div class="wrap fade" style="padding-bottom:80px">
+  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>学习计划 · AI 对话确认</h2><span></span></div>
+  <div class="chat">
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>我拟了一份<b>工作日计划</b>，安排在放学后 <b>17:30</b> 到睡前 <b>21:30</b>，中间预留了晚饭、休息和睡前洗漱时间。请逐项确认：<br>① 阅读《神奇校车》20 分钟<br>② 计算口算 15 分钟<br>③ 口语陪练「先听后说」15 分钟</div>
+    <div class="msg user"><div class="who">家长 · 文字</div>阅读能加到 25 分钟吗？</div>
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>已调整 ✅ 学习任务共 <b>55 分钟</b>：阅读 25min + 计算 15min + 口语陪练 15min，穿插晚饭、休息，21:00 开始洗漱，劳逸结合。</div>
+    <div class="msg user"><div class="who">家长 · 语音</div>好的，就这样。<div class="voice-hint">语音识别</div></div>
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>计划已确认并下发到「小满」设备 🤖<br>之后每天我会提醒子涵，并推送学习验收给你。</div>
+  </div>
+  <div class="inputbar">
+    <button class="mic" onclick="toggleMic(this)"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
+    <input class="textbox" placeholder="继续对话确认…">
+  </div>
+  <div style="padding:0 16px"><button class="btn" onclick="goto('home')">查看今日计划 →</button></div>
+</div>`;
+
+SCRENS.reading = ()=>{
+  const st = bookStats();
+  return `
+  <div class="wrap fade">
+    <div class="head"><div class="back" onclick="goBack()">‹</div><h2>兴趣书单</h2><span class="tag mint">个性化推荐</span></div>
+    <div class="hero" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div><h3>子涵的书单</h3><p>结合年龄、兴趣（奥特曼 / 汪汪队 / 神奇校车）与培养期望推荐，每本都有推荐理由与建议时长。</p></div>
+      <button class="btn sm ghost refresh-btn" style="width:auto;padding:8px 14px;font-size:12px;flex:none" onclick="refreshBooks()">🔄 刷新推荐</button>
+    </div>
+    <div class="card" style="background:linear-gradient(135deg,#FFE8E4,#FFF3DF);border-color:#F2E2C6;margin-bottom:12px">
+      <div style="font-weight:800;font-size:13px;color:#B26A1E">📊 累计阅读时间</div>
+      <div style="font-size:32px;font-weight:800;letter-spacing:-.02em;margin-top:6px">${fmtDuration(st.totalRead)}</div>
+      <div style="font-size:11.5px;color:#7A6A58;margin-top:2px">基于已读完的书目时长累计 · 共 ${BOOKS.length} 本推荐</div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <span class="tag mint">📖 进行中 ${st.doingCount}</span>
+        <span class="tag indigo">📋 计划清单 ${planBookIds.length}</span>
+        <span class="tag amber">✅ 已读完 ${st.readCount}</span>
+      </div>
+    </div>
+    ${BOOKS.map(bookCard).join('')}
+    <div style="height:20px"></div>
+  </div>`;
+};
+
+SCRENS.bookDetail = ()=>{
+  const b = BOOKS.find(x=>x.id===currentBookId);
+  if(!b) return SCRENS.reading();
+  const total = b.chapters.length;
+  const doneCount = b.chapters.filter(c=>c.done).length;
+  const allDone = doneCount === total;
+  const prog = Math.round(doneCount/total*100);
+  return `
+  <div class="wrap fade">
+    <div class="head"><div class="back" onclick="goBack()">‹</div><h2>书籍详情</h2><span class="tag ${allDone?'mint':'amber'}">${allDone?'已读完':'未读完'}</span></div>
+    <div class="card">
+      <div style="display:flex;gap:13px;align-items:center">
+        <div class="bk-icon">${b.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;font-size:16px">${b.title}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:3px">${b.author} · 建议 ${b.duration} 分钟</div>
+        </div>
+      </div>
+      <div class="prog" style="margin-top:14px"><i style="width:${prog}%"></i></div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:8px">阅读进度 · ${doneCount}/${total} 章（${prog}%）</div>
+    </div>
+    <button class="btn ${isInPlan(b.id)?'ghost':'mint'}" style="margin-top:12px" onclick="addToPlan('${b.id}')">${isInPlan(b.id)?'✓ 已加入计划清单':'加入计划清单'}</button>
+    <div class="card" style="margin-top:12px;background:#FFF8EE;border-color:#F2E2C6">
+      <div style="font-weight:800;font-size:13px;color:#B26A1E">📖 推荐理由</div>
+      <p style="font-size:13px;color:#7A6A48;margin-top:6px;line-height:1.6">${b.reason}</p>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div style="font-weight:800;margin-bottom:6px">章节清单（点击勾选）</div>
+      ${b.chapters.map((c,i)=>`
+        <div class="chk ${c.done?'done':''}" onclick="toggleChapter('${b.id}',${i})">
+          <div class="chk-box">✓</div>
+          <div>${c.t}</div>
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn mint" style="margin-top:14px" onclick="goto('home')">回到今日计划</button>
+  </div>`;
+};
+
+SCRENS.home = ()=>`
+<div class="wrap fade">
+  <div class="head"><h2>今日计划</h2><span class="tag mint">进行中</span></div>
+  <div class="hero"><h3>子涵的今晚 · 17:30-21:30</h3><p>放学后到睡前 · 预留晚饭、休息与洗漱时间</p><div class="prog" style="margin-top:10px"><i style="width:33%"></i></div></div>
+  <div class="tl">
+    <div class="tl-item life"><span class="tl-time">17:30-17:45</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🛋️</div><div style="flex:1"><div class="nm">放学回家 · 休息</div><div class="ds">放松一会儿再开始</div></div></div></div>
+    <div class="tl-item life"><span class="tl-time">17:45-18:15</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🍚</div><div style="flex:1"><div class="nm">晚饭时间</div><div class="ds">全家一起用餐</div></div></div></div>
+    <div class="tl-item life"><span class="tl-time">18:15-18:30</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🧘</div><div style="flex:1"><div class="nm">餐后休息</div><div class="ds">收拾桌面、准备学习</div></div></div></div>
+    <div class="tl-item study" onclick="push('reading')"><span class="tl-time">18:30-18:55</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">📖</div><div style="flex:1"><div class="nm">阅读 · 《神奇校车·水的故事》</div><div class="ds">查看兴趣书单 · 25 分钟</div></div><div style="color:var(--muted);font-size:18px">›</div></div></div>
+    <div class="tl-item life"><span class="tl-time">18:55-19:05</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🧘</div><div style="flex:1"><div class="nm">眼睛休息</div><div class="ds">远眺 · 活动一下</div></div></div></div>
+    <div class="tl-item study" onclick="toggleTask(this)"><span class="tl-time">19:05-19:20</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🔢</div><div style="flex:1"><div class="nm">计算 · 口算 20 题</div><div class="ds">校内同步 · 15 分钟</div></div><div class="ck">✓</div></div></div>
+    <div class="tl-item life"><span class="tl-time">19:20-19:30</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🍎</div><div style="flex:1"><div class="nm">吃点心 · 休息</div><div class="ds">补充能量</div></div></div></div>
+    <div class="tl-item study" onclick="toggleTask(this)"><span class="tl-time">19:30-19:45</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🎧</div><div style="flex:1"><div class="nm">口语陪练 · 先听后说</div><div class="ds">听 10 分钟 + 对练 5 分钟</div></div><div class="ck">✓</div></div></div>
+    <div class="tl-item study" onclick="toggleTask(this)"><span class="tl-time">19:45-20:15</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🎹</div><div style="flex:1"><div class="nm">兴趣打卡 · 钢琴 / 围棋</div><div class="ds">每日坚持 · 30 分钟</div></div><div class="ck">✓</div></div></div>
+    <div class="tl-item life"><span class="tl-time">20:15-21:00</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🎈</div><div style="flex:1"><div class="nm">亲子 / 自由时间</div><div class="ds">聊天、游戏或自由安排</div></div></div></div>
+    <div class="tl-item life"><span class="tl-time">21:00-21:30</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">🛁</div><div style="flex:1"><div class="nm">睡前洗漱</div><div class="ds">准备睡觉 · 早睡早起</div></div></div></div>
+  </div>
+  <button class="btn ghost" style="margin-top:12px" onclick="toggleAddPanel()">＋ 添加任务</button>
+  <div id="addPanel"></div>
+  <div style="height:20px"></div>
+</div>`;
+
+function toggleTask(el){ el.classList.toggle('done'); }
+
+let __toastTimer = null;
+function toast(msg){
+  let t = document.querySelector('.toast');
+  if(!t){ t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(__toastTimer);
+  __toastTimer = setTimeout(()=>{ t.classList.remove('show'); }, 2200);
+}
+
+function toggleAddPanel(){
+  const p = document.getElementById('addPanel');
+  if(!p) return;
+  if(p.innerHTML){ p.innerHTML = ''; return; }
+  p.innerHTML = `
+  <div class="card" style="margin-top:12px">
+    <div style="font-weight:800;margin-bottom:10px">添加任务</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn sm ${hwMode==='hw'?'mint':'ghost'}" style="width:auto;padding:7px 12px;font-size:11.5px" onclick="switchHw('hw')">🖊 手写</button>
+      <button class="btn sm ${hwMode==='text'?'mint':'ghost'}" style="width:auto;padding:7px 12px;font-size:11.5px" onclick="switchHw('text')">⌨ 文字</button>
+    </div>
+    <div id="hwArea"></div>
+    <input id="taskInput" class="textbox" placeholder="输入或识别任务内容，如：练字 15 分钟" style="width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px;font-size:14px;font-family:inherit;outline:none">
+    <div style="display:flex;gap:10px;margin-top:10px">
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:5px">开始时间</div>
+        <input type="time" id="taskStart" value="19:05" style="width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;font-size:14px;font-family:inherit;outline:none">
+      </div>
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:5px">结束时间</div>
+        <input type="time" id="taskEnd" value="19:20" style="width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;font-size:14px;font-family:inherit;outline:none">
+      </div>
+    </div>
+    <button class="btn mint" style="margin-top:12px" onclick="confirmAddTask()">确认 · AI 分配到计划</button>
+    <button class="btn ghost" style="margin-top:10px" onclick="toggleAddPanel()">取消</button>
+  </div>`;
+  switchHw(hwMode);
+}
+
+function switchHw(mode){
+  hwMode = mode;
+  const area = document.getElementById('hwArea');
+  if(!area) return;
+  if(mode==='hw'){
+    area.style.display='block';
+    if(!area.innerHTML){
+      area.innerHTML = `<canvas id="hwCanvas" width="320" height="110" style="width:100%;height:110px;border-radius:14px;background:#fff;border:1px dashed var(--line);cursor:crosshair;display:block"></canvas>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn sm mint hw-recognize" style="width:auto;padding:7px 12px;font-size:11.5px" onclick="hwRecognize()">识别手写</button>
+        <button class="btn sm ghost" style="width:auto;padding:7px 12px;font-size:11.5px" onclick="hwClear()">清除画板</button>
+      </div>`;
+      initHw();
+    }
+  } else {
+    area.style.display='none';
+  }
+}
+
+function initHw(){
+  const cv = document.getElementById('hwCanvas');
+  if(!cv) return;
+  const ctx = cv.getContext('2d');
+  ctx.strokeStyle = '#2A2520';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  let drawing = false;
+  const pos = (e)=>{
+    const r = cv.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (cv.width / r.width);
+    const y = (e.clientY - r.top) * (cv.height / r.height);
+    return [x,y];
+  };
+  cv.onmousedown = (e)=>{ drawing=true; const [x,y]=pos(e); ctx.beginPath(); ctx.moveTo(x,y); };
+  cv.onmousemove = (e)=>{ if(!drawing) return; const [x,y]=pos(e); ctx.lineTo(x,y); ctx.stroke(); };
+  cv.onmouseup = ()=>{ drawing=false; };
+  cv.onmouseleave = ()=>{ drawing=false; };
+  cv.ontouchstart = (e)=>{ drawing=true; const t=e.touches[0]; const r=cv.getBoundingClientRect(); const x=(t.clientX-r.left)*(cv.width/r.width), y=(t.clientY-r.top)*(cv.height/r.height); ctx.beginPath(); ctx.moveTo(x,y); };
+  cv.ontouchmove = (e)=>{ if(!drawing) return; e.preventDefault(); const t=e.touches[0]; const r=cv.getBoundingClientRect(); const x=(t.clientX-r.left)*(cv.width/r.width), y=(t.clientY-r.top)*(cv.height/r.height); ctx.lineTo(x,y); ctx.stroke(); };
+  cv.ontouchend = ()=>{ drawing=false; };
+}
+
+function hwRecognize(){
+  const btn = document.querySelector('.hw-recognize');
+  if(btn){ btn.textContent='识别中…'; btn.disabled=true; }
+  setTimeout(()=>{
+    const t = document.getElementById('taskInput');
+    if(t){ t.value = '练字 15 分钟'; }
+    toast('已识别为：练字 15 分钟');
+    if(btn){ btn.textContent='识别手写'; btn.disabled=false; }
+  }, 600);
+}
+
+function hwClear(){
+  const cv = document.getElementById('hwCanvas');
+  if(cv){ cv.getContext('2d').clearRect(0,0,cv.width,cv.height); }
+}
+
+function toMin(t){
+  const [h,m] = t.split(':').map(Number);
+  return h*60+m;
+}
+
+function insertTaskByTime(name, start, end){
+  const tl = document.querySelector('.tl');
+  if(!tl) return;
+  const el = document.createElement('div');
+  el.className = 'tl-item study';
+  el.onclick = ()=>toggleTask(el);
+  el.innerHTML = `<span class="tl-time">${start}-${end}</span><div class="tl-dot"></div><div class="tl-card"><div class="ic">📝</div><div style="flex:1"><div class="nm">${name}</div><div class="ds">AI 安排 · ${start}-${end}</div></div><div class="ck">✓</div></div>`;
+  const items = Array.from(tl.querySelectorAll('.tl-item'));
+  const newStart = toMin(start);
+  let idx = items.length;
+  for(let i=0;i<items.length;i++){
+    const tm = items[i].querySelector('.tl-time');
+    if(tm){
+      const s = tm.textContent.split('-')[0];
+      if(newStart < toMin(s)){ idx = i; break; }
+    }
+  }
+  tl.insertBefore(el, tl.children[idx] || null);
+}
+
+function confirmAddTask(){
+  const input = document.getElementById('taskInput');
+  const name = (input && input.value || '').trim();
+  const start = document.getElementById('taskStart')?.value || '';
+  const end = document.getElementById('taskEnd')?.value || '';
+  if(!name){ toast('请输入或识别任务内容'); return; }
+  if(!start || !end){ toast('请选择时间范围'); return; }
+  toast('AI 正在安排任务…');
+  setTimeout(()=>{
+    insertTaskByTime(name, start, end);
+    toast('AI 已将「'+name+'」安排到 '+start+'-'+end);
+    toggleAddPanel();
+  }, 600);
+}
+
+const CHECK_QS = [
+  {pool:[
+    '今天子涵阅读、口算、口语都完成了。可以问他：<b>「今天哪件事让你最有成就感？」</b>',
+    '今天阅读、口算、口语都做完了。最想让爸爸/妈妈知道你完成了哪一项？',
+    '今天完成的学习任务里，你觉得自己做得最好的是哪一个？'
+  ]},
+  {pool:[
+    '今天子涵情绪积极、专注。可以聊聊：<b>「今天最开心的一件事是什么？」</b>',
+    '今天子涵状态不错。有没有一件让他特别开心的事想分享？',
+    '今天子涵一直很专注。最想和爸爸/妈妈分享今天的哪个瞬间？'
+  ]},
+  {pool:[
+    '8 岁正是好奇心强的阶段。可以问他：<b>「如果《神奇校车》开去太空，你想跟着去吗？为什么？」</b>',
+    '子涵喜欢奥特曼。如果奥特曼邀请子涵一起执行任务，他最想做什么？',
+    '如果让子涵给《神奇校车》编一个新故事，他想让它去哪里探险？'
+  ]}
+];
+let checkQIndex = [0,0,0];
+let checkQText = ['', '', ''];
+const CHECK_CONTEXT = [
+  '学习验收结果：阅读、口算、口语、兴趣打卡均已完成，作业正确率 96%，阅读专注度高',
+  '孩子情绪：积极专注，状态饱满，愿意分享',
+  '成长阶段：8 岁好奇心强，喜欢奥特曼、汪汪队、神奇校车'
+];
+
+async function swapCheckQ(i){
+  if(checkQStreaming) return;
+  checkQStreaming = true;
+  toast('AI 正在重新生成问题…');
+  try {
+    const res = await fetch('/api/check/regenerate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index: i, context: CHECK_CONTEXT[i] })
+    });
+    const data = await res.json();
+    const q = (data && data.question) ? String(data.question).trim() : '';
+    if(q){
+      checkQText[i] = q;
+      render();
+      toast('已换一个新问题');
+    } else {
+      localSwap(i);
+    }
+  } catch(err){
+    localSwap(i);
+  } finally {
+    checkQStreaming = false;
+  }
+}
+
+function localSwap(i){
+  checkQIndex[i] = (checkQIndex[i] + 1) % CHECK_QS[i].pool.length;
+  render();
+}
+
+SCRENS.check = ()=>`
+<div class="wrap fade">
+  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>学习验收</h2><span class="tag amber">AI 已生成</span></div>
+  <div class="hero"><h3>今日验收 · 亲子互动 3 问</h3><p>AI 根据学习验收结果、孩子情绪与成长阶段，生成 3 个互动问题，用于提升亲子陪伴关系。</p></div>
+  <div class="card" style="background:linear-gradient(135deg,#FFE8E4,#FFF3DF);border-color:#F2E2C6">
+    <div style="font-weight:800;font-size:13px;color:#B26A1E">🤝 生成依据</div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <span class="tag coral">📊 验收结果 · 完成 4 项</span>
+      <span class="tag mint">😊 学习情绪 · 积极专注</span>
+      <span class="tag indigo">🌱 成长阶段 · 8 岁好奇心强</span>
+    </div>
+  </div>
+  <div class="quiz">
+    <h4>🤝 问题一 · 来自学习验收结果</h4>
+    <div class="q">${checkQText[0] || CHECK_QS[0].pool[checkQIndex[0]]}</div>
+    <div class="opts" style="flex-direction:row;flex-wrap:wrap;gap:8px"><button class="opt" style="flex:1" onclick="toast('今晚试试这个互动问题')">好的，今晚试试</button><button class="opt" style="flex:0 0 auto;border:1.5px dashed var(--line);color:var(--muted)" onclick="swapCheckQ(0)">换一个</button></div>
+  </div>
+  <div class="quiz">
+    <h4>🤝 问题二 · 来自学习情绪</h4>
+    <div class="q">${checkQText[1] || CHECK_QS[1].pool[checkQIndex[1]]}</div>
+    <div class="opts" style="flex-direction:row;flex-wrap:wrap;gap:8px"><button class="opt" style="flex:1" onclick="toast('今晚试试这个互动问题')">好的，今晚试试</button><button class="opt" style="flex:0 0 auto;border:1.5px dashed var(--line);color:var(--muted)" onclick="swapCheckQ(1)">换一个</button></div>
+  </div>
+  <div class="quiz">
+    <h4>🤝 问题三 · 来自成长阶段</h4>
+    <div class="q">${checkQText[2] || CHECK_QS[2].pool[checkQIndex[2]]}</div>
+    <div class="opts" style="flex-direction:row;flex-wrap:wrap;gap:8px"><button class="opt" style="flex:1" onclick="toast('今晚试试这个互动问题')">好的，今晚试试</button><button class="opt" style="flex:0 0 auto;border:1.5px dashed var(--line);color:var(--muted)" onclick="swapCheckQ(2)">换一个</button></div>
+  </div>
+  <button class="btn" style="margin-top:12px" onclick="goto('points')">查看今日积分 →</button>
+</div>`;
+
+const REWARDS = [
+  {id:'r1', icon:'⭐', name:'解锁奥特曼语音包', cost:1200, desc:'设备端全部语音换奥特曼音色'},
+  {id:'r2', icon:'🎁', name:'兑换「汪汪队」贴纸', cost:300, desc:'实物贴纸包'},
+  {id:'r3', icon:'🕹️', name:'解锁 10 分钟休闲时长', cost:500, desc:'本周增加 10 分钟自由时间'},
+  {id:'r4', icon:'🎯', name:'兑换「神奇校车」徽章', cost:200, desc:'阅读成就徽章'}
+];
+function rewardCard(r){
+  const status = totalPoints >= r.cost
+    ? '<span class="tag amber">可兑换</span>'
+    : `<span class="tag indigo">还差 ${(r.cost - totalPoints).toLocaleString()}</span>`;
+  return `<div class="reward"><div class="icon amber">${r.icon}</div><div style="flex:1"><b>${r.name}</b><p style="font-size:12px;color:var(--muted)">${r.cost} 积分 · ${r.desc}</p></div>${status}</div>`;
+}
+function devRewardCard(r){
+  const status = totalPoints >= r.cost
+    ? `<button class="btn sm mint" style="width:auto;padding:6px 12px;font-size:11.5px" onclick="redeemReward('${r.id}')">兑换</button>`
+    : `<span class="tag indigo">还差 ${(r.cost - totalPoints).toLocaleString()}</span>`;
+  return `<div class="dev-card"><div class="icon amber">${r.icon}</div><div style="flex:1"><b style="font-size:13.5px">${r.name}</b><p style="font-size:11.5px;color:var(--muted);margin:2px 0 0">${r.cost} 积分</p></div>${status}</div>`;
+}
+function redeemReward(id){
+  const r = REWARDS.find(x=>x.id===id);
+  if(!r) return;
+  if(totalPoints < r.cost){ toast(`还差 ${(r.cost - totalPoints).toLocaleString()} 积分，继续加油～`); return; }
+  totalPoints -= r.cost;
+  toast(`已兑换：${r.name} 🎉`);
+  render(); renderDev();
+}
+SCRENS.points = ()=>`
+<div class="wrap fade">
+  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>积分与奖励</h2><span class="tag mint">本学期</span></div>
+  <div class="hero"><h2>2026 秋季学期</h2><p>按当前学期统计积分 · 兑换明细实时更新</p></div>
+  <div class="pts"><div class="big">${totalPoints.toLocaleString()}</div><div class="lab">本学期累计 · 星芽 Lv.3</div></div>
+  <div class="prog" style="margin-bottom:14px"><i style="width:72%"></i></div>
+  <div class="card" style="margin-bottom:14px">
+    <div style="font-weight:800;margin-bottom:8px">🤖 AI 积分规则</div>
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.7;margin:0">阅读 15 分钟 +15 分；口算完成 +10 分；口语陪练打卡 +20 分；阅读问答答对 +20 分。每月末自动结算，连续完成 7 天额外奖励 50 分。</p>
+  </div>
+  <div style="font-weight:800;margin:6px 0 10px">🎁 积分兑换奖励明细</div>
+  ${REWARDS.map(rewardCard).join('')}
+  <button class="btn ghost" style="margin-top:12px" onclick="goto('home')">回到今日计划</button>
+  <button class="btn mint" style="margin-top:10px" onclick="devGo('shop')">在设备端兑换奖励</button>
+</div>`;
+
+SCRENS.me = ()=>`
+<div class="wrap fade">
+  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>我的</h2><span></span></div>
+  <div class="device-found">
+    <div class="mascot">🤖</div>
+    <div style="flex:1"><div class="name">小满伴学 · 0321</div><div class="mac">已绑定 · 在线 · 电量 98%</div></div>
+    <button class="btn sm ghost" onclick="toast('设备解绑 / 重新绑定')">管理</button>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div style="font-weight:800;margin-bottom:10px">孩子档案 · 子涵</div>
+    <div class="meta" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><span class="tag coral">8 岁 · 二年级 · 男</span><span class="tag mint">钢琴 / 围棋</span></div>
+    <p style="font-size:12.5px;color:var(--muted)">兴趣：奥特曼、汪汪队、《神奇校车》<br>培养期望：阅读 + 口语加强，数学保持</p>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div style="font-weight:800;margin-bottom:6px">🎙️ IP 声音克隆</div>
+    <p style="font-size:12.5px;color:var(--muted)">选择设备端使用的克隆音色，口语陪练会用该声音与子涵对练。</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn sm ${cloneVoice==='奥特曼音色'?'mint':'ghost'}" style="width:auto;padding:7px 12px;font-size:11.5px" onclick="setCloneVoice('奥特曼音色')">🎤 奥特曼音色</button>
+      <button class="btn sm ${cloneVoice==='汪汪队音色'?'mint':'ghost'}" style="width:auto;padding:7px 12px;font-size:11.5px" onclick="setCloneVoice('汪汪队音色')">🎤 汪汪队音色</button>
+      <button class="btn sm ${cloneVoice==='原声'?'mint':'ghost'}" style="width:auto;padding:7px 12px;font-size:11.5px" onclick="setCloneVoice('原声')">🎤 原声</button>
+    </div>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:10px">当前：${cloneVoice?cloneVoice:'未选择（默认原声）'}</p>
+  </div>
+  <div class="card" style="display:flex;gap:13px;align-items:center;cursor:pointer;margin-top:12px" onclick="goto('points')">
+    <div class="icon amber" style="width:44px;height:44px;font-size:22px">⭐</div>
+    <div style="flex:1"><b style="font-size:15px">积分与奖励</b><p style="font-size:12px;color:var(--muted);margin:2px 0 0">本学期积分 · 兑换明细</p></div>
+    <div style="color:var(--muted);font-size:18px">›</div>
+  </div>
+  <div style="height:20px"></div>
+</div>`;
+
+/* ---------- 设备端 ---------- */
+const DEV = {};
+DEV.home = ()=>`
+<div class="wrap fade">
+  <div class="dev-hero"><h3>下午好，子涵 👋</h3><p>今天有 3 项学习任务，我们一起完成吧～</p></div>
+  <div style="display:flex;justify-content:center;margin-top:18px"><div class="mascot">🤖</div></div>
+  <div class="dev-card"><div class="icon mint">📖</div><div style="flex:1"><b>阅读 · 神奇校车</b><p style="font-size:12px;color:var(--muted)">25 分钟</p></div></div>
+  <div class="dev-card"><div class="icon amber">🔢</div><div style="flex:1"><b>计算 · 口算 20 题</b><p style="font-size:12px;color:var(--muted)">15 分钟</p></div></div>
+  <div class="dev-card"><div class="icon coral">🗣️</div><div style="flex:1"><b>口语陪练 · 先听后说</b><p style="font-size:12px;color:var(--muted)">15 分钟</p></div></div>
+  <div class="dev-card" style="cursor:pointer" onclick="devGo('shop')"><div class="icon amber">⭐</div><div style="flex:1"><b>积分商城</b><p style="font-size:12px;color:var(--muted)">${totalPoints} 积分</p></div></div>
+  <button class="btn" style="margin-top:14px" onclick="devGo('reading')">开始第一项 📖</button>
+</div>`;
+
+DEV.reading = ()=>`
+<div class="wrap fade">
+  <div class="head"><div class="back" onclick="devGo('home')">‹</div><h2>阅读时光</h2><span class="tag mint">📖</span></div>
+  <div class="card">
+    <div style="display:flex;gap:13px;align-items:center">
+      <div class="icon mint" style="width:44px;height:44px;font-size:22px">📖</div>
+      <div style="flex:1"><b>《神奇校车·水的故事》</b><p style="font-size:12px;color:var(--muted)">第 4 章 · 第 8 页</p></div>
+    </div>
+    <div class="prog" style="margin-top:14px"><i style="width:38%"></i></div>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:8px">跟着小满一起朗读，读完会有小问题哦～</p>
+  </div>
+  <button class="btn mint" style="margin-top:14px" onclick="devGo('quiz')">开始朗读 →</button>
+  <button class="btn ghost" style="margin-top:10px" onclick="devGo('home')">稍后再读</button>
+</div>`;
+
+DEV.listen = ()=>`
+<div class="wrap fade">
+  <div class="head"><div class="back" onclick="devGo('home')">‹</div><h2>口语陪练 · 听</h2><span class="tag coral">🎧</span></div>
+  <div class="card" style="text-align:center;padding:26px 16px">
+    <div style="font-size:15px;font-weight:800">今日听力 · 自然拼读</div>
+    <div class="audio-wave" style="justify-content:center;margin:22px 0">
+      <i></i><i></i><i></i><i></i><i></i>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted)">端侧播放内容，听完回答问题即可得奖励。</p>
+  </div>
+  <button class="btn coral" style="margin-top:14px" onclick="devGo('quiz')">听完了，答题 →</button>
+</div>`;
+
+DEV.speak = ()=>`
+<div class="wrap fade">
+  <div class="head"><div class="back" onclick="devGo('home')">‹</div><h2>口语陪练 · 说</h2><span class="tag indigo">🎤 ${cloneVoice?cloneVoice:'原声'}</span></div>
+  <div class="card" style="text-align:center;padding:26px 16px">
+    <div style="font-size:15px;font-weight:800">英语老师口语陪练</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px">同步学校教材 · 适当扩展</div>
+    <p style="font-size:13px;color:var(--ink);margin:14px 0">老师：<i>“What did you do after school today?”</i></p>
+    <div style="font-size:11.5px;color:var(--muted)">按住麦克风，用英语回答…</div>
+  </div>
+  <button class="mic" style="width:64px;height:64px;margin:20px auto;display:grid;place-items:center" onclick="this.classList.toggle('rec')"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
+  <button class="btn ghost" onclick="devGo('home')">结束对练</button>
+</div>`;
+
+DEV.quiz = ()=>`
+<div class="wrap fade">
+  <div class="head"><div class="back" onclick="devGo('home')">‹</div><h2>小问题 ⭐</h2><span class="tag amber">答题有奖励</span></div>
+  <div class="quiz"><h4>📖 阅读小问答</h4><div class="q">水是怎么变成云的？</div><div class="opts"><div class="opt correct">✅ 水蒸发后变成水蒸气，遇冷成云</div><div class="opt">答错了，再想想～</div></div></div>
+  <div class="star-badge"><div class="s">⭐ +20</div><div class="lab">答对啦！积分已到账</div></div>
+  <button class="btn" style="margin-top:14px" onclick="devGo('listen')">下一题 · 口语听力 →</button>
+</div>`;
+
+DEV.shop = ()=>`
+<div class="wrap fade">
+  <div class="head"><div class="back" onclick="devGo('home')">‹</div><h2>积分商城</h2><span class="tag amber">⭐ ${totalPoints}</span></div>
+  <div class="dev-hero"><h3>本学期积分</h3><p>兑换奖励 · 快乐成长</p></div>
+  <div class="pts" style="margin:14px 0 6px"><div class="big">${totalPoints.toLocaleString()}</div><div class="lab">可兑换奖励</div></div>
+  ${REWARDS.map(devRewardCard).join('')}
+</div>`;
+
+function renderDev(){
+  devBody.innerHTML = DEV[deviceScreen]();
+  devBody.scrollTop = 0;
+  devBody.classList.remove('fade'); void devBody.offsetWidth; devBody.classList.add('fade');
+}
+function devGo(name){ deviceScreen = name; renderDev(); }
+
+/* ---------- 启动 ---------- */
+render();
+renderDev();
+</script>
+</body>
+</html>
