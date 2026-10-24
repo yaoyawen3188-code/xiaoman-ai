@@ -335,16 +335,12 @@ async function sendText(input){
   const aiWho = document.createElement('div'); aiWho.className = 'who'; aiWho.textContent = '小满 · AI 助手';
   const aiContent = document.createElement('div'); aiContent.className = 'ai-content'; aiContent.textContent = '小满正在思考…';
   ai.appendChild(aiWho); ai.appendChild(aiContent);
-  const aiBtn = document.createElement('button');
-  aiBtn.className = 'btn sm ghost';
-  aiBtn.style.cssText = 'width:auto;padding:5px 10px;font-size:11px;margin-top:6px;display:none;flex:none';
-  aiBtn.textContent = '📖 把推荐书加入书单';
-  aiBtn.onclick = () => { addAiBooks(); };
-  ai.appendChild(aiBtn);
   chat.appendChild(ai);
   chat.scrollTop = chat.scrollHeight;
 
   chatHistory.push({ role: 'user', content: v });
+  // 家长主动要求「加入书单」时，从上一轮 AI 回复提取书名
+  if(/加入书单|加入清单|加到书单|加书单|加清单/.test(v)){ addAiBooks(); }
   streaming = true;
 
   const scrollChat = () => { chat.scrollTop = chat.scrollHeight; };
@@ -393,7 +389,6 @@ async function sendText(input){
       aiContent.textContent = aiContent.textContent || '（未收到回复内容）';
     }
     lastAiReply = full;
-    aiBtn.style.display = full ? 'inline-block' : 'none';
     chatHistory.push({ role: 'assistant', content: full || aiContent.textContent });
   } catch(err){
     aiContent.textContent = '⚠️ AI 服务暂时无法连接，请稍后重试或检查后端是否已部署。';
