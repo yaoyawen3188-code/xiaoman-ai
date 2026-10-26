@@ -1085,12 +1085,14 @@ SCRENS.directions = ()=>`
 SCRENS.confirm = ()=>{
   const tasks = planTasks();
   const planItems = tasks.map((t,i) => `${i+1}. ${t.icon} ${t.name} · ${fmtMin(t.min)}`).join('<br>');
+  const adjusted = !!confirmReply;
   const reply = confirmReply || '我根据伴学档案拟了一份<b>工作日计划</b>，安排在放学后 <b>17:30</b> 到睡前 <b>21:30</b>，中间预留晚饭、休息和睡前洗漱时间。请你逐项确认，或告诉我要调整的地方：';
+  const planLabel = adjusted ? '<b>📋 修改后的计划</b><br><br>' : '';
   return `
 <div class="wrap fade" style="padding-bottom:80px">
   <div class="head"><div class="back" onclick="goBack()">‹</div><h2>学习计划 · 家长确认</h2><span></span></div>
   <div class="chat">
-    <div class="msg ai"><div class="who">小满 · AI 助手</div>${reply}<br><br>${planItems || '（暂未生成具体任务，可先在「伴学」里补充时长要求）'}</div>
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>${reply}<br><br>${planLabel}${planItems || '（暂未生成具体任务，可先在「伴学」里补充时长要求）'}</div>
   </div>
   <div class="inputbar">
     <button class="mic" onclick="toggleMic(this)"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
@@ -1144,7 +1146,11 @@ async function adjustPlan(input){
         beforeDinner: !!t.beforeDinner
       }));
     }
-    confirmReply = data.reply || '已按你的要求调整好计划。';
+    let replyText = (data.reply || '已按你的要求调整好计划，请确认。').trim();
+    if(replyText.includes('？') || replyText.includes('?')){
+      replyText = '已按你的要求调整好计划，请确认。';
+    }
+    confirmReply = replyText;
     render();
   } catch(err){
     aiMsg.querySelector('.ai-content').textContent = '⚠️ 调整失败：' + err.message;
