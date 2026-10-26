@@ -279,6 +279,9 @@ let streaming = false;
 let checkQStreaming = false;
 let lastAiReply = '';
 let aiPlan = '';
+let aiTasks = null;          // 大模型调整后返回的结构化学习任务
+let confirmReply = '';       // 确认页最近一次 AI 回复
+let confirmPlanBusy = false; // 确认页调整请求进行中标记
 
 /* ---------- 伴学页历史持久化 ---------- */
 function loadProfileChat(){
@@ -397,7 +400,13 @@ function render(){
   if (name==='profile') bindMic(body.querySelector('.mic'));
   if (name==='confirm') bindMic(body.querySelector('.mic'));
   const ti = body.querySelector('.textbox');
-  if(ti) ti.onkeydown = (e)=>{ if(e.key==='Enter') sendText(ti); };
+  if(ti){
+    if(name === 'confirm'){
+      ti.onkeydown = (e)=>{ if(e.key==='Enter') adjustPlan(ti); };
+    } else {
+      ti.onkeydown = (e)=>{ if(e.key==='Enter') sendText(ti); };
+    }
+  }
   body.classList.remove('fade'); void body.offsetWidth; body.classList.add('fade');
 }
 
@@ -1076,11 +1085,12 @@ SCRENS.directions = ()=>`
 SCRENS.confirm = ()=>{
   const tasks = planTasks();
   const planItems = tasks.map((t,i) => `${i+1}. ${t.icon} ${t.name} · ${fmtMin(t.min)}`).join('<br>');
+  const reply = confirmReply || '我根据伴学档案拟了一份<b>工作日计划</b>，安排在放学后 <b>17:30</b> 到睡前 <b>21:30</b>，中间预留晚饭、休息和睡前洗漱时间。请你逐项确认，或告诉我要调整的地方：';
   return `
 <div class="wrap fade" style="padding-bottom:80px">
   <div class="head"><div class="back" onclick="goBack()">‹</div><h2>学习计划 · 家长确认</h2><span></span></div>
   <div class="chat">
-    <div class="msg ai"><div class="who">小满 · AI 助手</div>我根据伴学档案拟了一份<b>工作日计划</b>，安排在放学后 <b>17:30</b> 到睡前 <b>21:30</b>，中间预留晚饭、休息和睡前洗漱时间。请你逐项确认，或告诉我要调整的地方：<br><br>${planItems || '（暂未生成具体任务，可先在「伴学」里补充时长要求）'}</div>
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>${reply}<br><br>${planItems || '（暂未生成具体任务，可先在「伴学」里补充时长要求）'}</div>
   </div>
   <div class="inputbar">
     <button class="mic" onclick="toggleMic(this)"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
@@ -1093,6 +1103,54 @@ SCRENS.confirm = ()=>{
 function confirmPlan(){
   toast('学习计划已确认，并下发到「小满」设备 🤖');
   goto('home');
+}
+
+/* 家长在确认页输入调整要求，交给大模型在上次计划基础上重新安排时间 */
+async function adjustPlan(input){
+  const v = input.value.trim();
+  if(!v || confirmPlanBusy) return;
+  const chat = document.querySelector('.chat');
+  if(!chat) return;
+
+  // 当前计划摘要，作为大模型调整的输入基础
+  const tasks = planTasks();
+  const planText = tasks.map((t,i) => `${i+1}. ${t.name}（${fmtMin(t.min)}${t.beforeDinner?'，晚饭前':'，晚饭后'}）`).join('\n');
+
+  input.value = '';
+  confirmPlanBusy = true;
+
+  const aiMsg = document.createElement('div');
+  aiMsg.className = 'msg ai';
+  aiMsg.innerHTML = '<div class="who">小满 · AI 助手</div><div class="ai-content">正在按你的要求重新安排时间…</div>';
+  chat.appendChild(aiMsg);
+  chat.scrollTop = chat.scrollHeight;
+
+  try {
+    const res = await fetch('/api/plan/adjust', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: planText, request: v })
+    });
+    const data = await res.json().catch(() => ({ reply: '', tasks: [] }));
+    if(!res.ok){
+      throw new Error(data.reply || 'HTTP ' + res.status);
+    }
+    if(data.tasks && data.tasks.length){
+      aiTasks = data.tasks.map(t => ({
+        name: (t.name || '学习任务').trim(),
+        icon: t.icon || '📘',
+        desc: t.desc || '',
+        min: Math.max(1, Math.min(180, Number(t.min) || 20)),
+        beforeDinner: !!t.beforeDinner
+      }));
+    }
+    confirmReply = data.reply || '已按你的要求调整好计划。';
+    render();
+  } catch(err){
+    aiMsg.querySelector('.ai-content').textContent = '⚠️ 调整失败：' + err.message;
+  } finally {
+    confirmPlanBusy = false;
+  }
 }
 
 SCRENS.reading = ()=>{
@@ -1209,6 +1267,19 @@ function findDuration(text, keywords, window){
 }
 
 function planTasks(){
+  // 优先使用大模型调整后返回的结构化任务
+  if(aiTasks && aiTasks.length){
+    return aiTasks.map(t => ({
+      name: t.name || '学习任务',
+      icon: t.icon || '📘',
+      desc: t.desc || `${fmtMin(t.min || 20)}`,
+      min: Math.max(1, Math.min(180, Number(t.min) || 20)),
+      beforeDinner: !!t.beforeDinner,
+      arrow: false,
+      onclick: 'toggleTask(this)'
+    }));
+  }
+
   const text = aiPlan || '';
   const bookMatch = text.match(/《([^》]+)》/);
   const book = bookMatch ? '《' + bookMatch[1].trim() + '》' : defaultBook();
