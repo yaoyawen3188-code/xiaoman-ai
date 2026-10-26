@@ -1388,7 +1388,11 @@ function homeTimelineHtml(){
     }
   });
 
-  // 晚饭 18:30-19:00
+  // 晚饭 18:30-19:00（前面有空隙则补一段休息）
+  if(t < DINNER_START){
+    items.push(lifeItem(t, DINNER_START, '🧘', '休息 / 准备晚饭', '放松一下，准备吃饭'));
+    t = DINNER_START;
+  }
   items.push(lifeItem(DINNER_START, DINNER_START+30, '🍚', '晚饭时间', '全家一起用餐'));
   t = DINNER_START + 30;
 
