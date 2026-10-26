@@ -1266,10 +1266,35 @@ function findDuration(text, keywords, window){
   return null;
 }
 
+const MAX_STUDY_MIN = 150;
+
+function clampStudyTasks(tasks){
+  if(!tasks || !tasks.length) return [];
+  const out = tasks.map(t => ({
+    name: t.name || '学习任务',
+    icon: t.icon || '📘',
+    desc: t.desc || `${fmtMin(t.min || 20)}`,
+    min: Math.max(10, Math.min(60, Number(t.min) || 20)),
+    beforeDinner: !!t.beforeDinner,
+    arrow: !!t.arrow,
+    onclick: t.onclick || 'toggleTask(this)'
+  }));
+  // 分时段硬预算：晚饭前 45 分钟、晚饭后 105 分钟，总学习时长不超过 150 分钟
+  const scaleGroup = (group, budget) => {
+    const total = group.reduce((s,t)=>s+t.min,0);
+    if(total <= budget) return;
+    const scale = budget / total;
+    group.forEach(t => { t.min = Math.max(10, Math.round(t.min * scale)); });
+  };
+  scaleGroup(out.filter(t=>t.beforeDinner), 45);
+  scaleGroup(out.filter(t=>!t.beforeDinner), 105);
+  return out;
+}
+
 function planTasks(){
-  // 优先使用大模型调整后返回的结构化任务
+  let raw;
   if(aiTasks && aiTasks.length){
-    return aiTasks.map(t => ({
+    raw = aiTasks.map(t => ({
       name: t.name || '学习任务',
       icon: t.icon || '📘',
       desc: t.desc || `${fmtMin(t.min || 20)}`,
@@ -1278,48 +1303,46 @@ function planTasks(){
       arrow: false,
       onclick: 'toggleTask(this)'
     }));
-  }
-
-  const text = aiPlan || '';
-  const bookMatch = text.match(/《([^》]+)》/);
-  const book = bookMatch ? '《' + bookMatch[1].trim() + '》' : defaultBook();
-
-  // 还没有 AI 计划时，回退到默认四项
-  if(!aiPlan){
-    return [
+  } else if(!aiPlan){
+    const book = defaultBook();
+    raw = [
       { name:`阅读 · ${book}`, icon:'📖', desc:'查看兴趣书单 · 25 分钟', min:25, beforeDinner:false, arrow:true, onclick:"push('reading')" },
-      { name:'计算 · 口算 20 题', icon:'🔢', desc:'校内同步 · 15 分钟', min:15, beforeDinner:false, onclick:'toggleTask(this)' },
-      { name:'口语陪练 · 先听后说', icon:'🎧', desc:'听 10 分钟 + 对练 5 分钟', min:15, beforeDinner:false, onclick:'toggleTask(this)' },
-      { name:'兴趣打卡 · 钢琴 / 围棋', icon:'🎹', desc:'每日坚持 · 30 分钟', min:30, beforeDinner:false, onclick:'toggleTask(this)' }
+      { name:'计算 · 口算 20 题', icon:'🔢', desc:'校内同步 · 15 分钟', min:15, beforeDinner:false, arrow:false, onclick:'toggleTask(this)' },
+      { name:'口语陪练 · 先听后说', icon:'🎧', desc:'听 10 分钟 + 对练 5 分钟', min:15, beforeDinner:false, arrow:false, onclick:'toggleTask(this)' },
+      { name:'兴趣打卡 · 钢琴 / 围棋', icon:'🎹', desc:'每日坚持 · 30 分钟', min:30, beforeDinner:false, arrow:false, onclick:'toggleTask(this)' }
     ];
+  } else {
+    const text = aiPlan || '';
+    const bookMatch = text.match(/《([^》]+)》/);
+    const book = bookMatch ? '《' + bookMatch[1].trim() + '》' : defaultBook();
+    const dirs = extractDirections(text);
+    raw = dirs.map(d => {
+      let name = d.title;
+      let desc = `${fmtMin(d.min)} · ${d.desc}`;
+      let onclick = 'toggleTask(this)';
+      let arrow = false;
+      if(d.key === 'tt'){
+        name = '数学天天练';
+        desc = `${fmtMin(d.min)} · 单独任务 · 校内练习`;
+      } else if(d.key === 'read'){
+        name = `阅读 · ${book}`;
+        desc = `${fmtMin(d.min)} · 查看兴趣书单`;
+        onclick = "push('reading')";
+        arrow = true;
+      } else if(d.key === 'calc'){
+        name = '计算 · 口算练习';
+        desc = `${fmtMin(d.min)} · 校内同步`;
+      } else if(d.key === 'oral'){
+        name = '口语陪练 · 先听后说';
+        desc = `${fmtMin(d.min)} · 听 + 对练`;
+      } else if(d.key === 'other'){
+        name = '兴趣打卡 · 钢琴 / 围棋';
+        desc = `${fmtMin(d.min)} · 每日坚持`;
+      }
+      return { name, icon:d.icon, desc, min:d.min, beforeDinner:d.beforeDinner, arrow, onclick };
+    });
   }
-
-  const dirs = extractDirections(text);
-  return dirs.map(d => {
-    let name = d.title;
-    let desc = `${fmtMin(d.min)} · ${d.desc}`;
-    let onclick = 'toggleTask(this)';
-    let arrow = false;
-    if(d.key === 'tt'){
-      name = '数学天天练';
-      desc = `${fmtMin(d.min)} · 单独任务 · 校内练习`;
-    } else if(d.key === 'read'){
-      name = `阅读 · ${book}`;
-      desc = `${fmtMin(d.min)} · 查看兴趣书单`;
-      onclick = "push('reading')";
-      arrow = true;
-    } else if(d.key === 'calc'){
-      name = '计算 · 口算练习';
-      desc = `${fmtMin(d.min)} · 校内同步`;
-    } else if(d.key === 'oral'){
-      name = '口语陪练 · 先听后说';
-      desc = `${fmtMin(d.min)} · 听 + 对练`;
-    } else if(d.key === 'other'){
-      name = '兴趣打卡 · 钢琴 / 围棋';
-      desc = `${fmtMin(d.min)} · 每日坚持`;
-    }
-    return { name, icon:d.icon, desc, min:d.min, beforeDinner:d.beforeDinner, arrow, onclick };
-  });
+  return clampStudyTasks(raw);
 }
 
 function lifeItem(start, end, icon, name, desc){
@@ -1342,56 +1365,62 @@ function homeTimelineHtml(){
   const after = tasks.filter(t => !t.beforeDinner);
   const items = [];
 
-  // 固定开头
-  items.push(lifeItem(17*60+30, 17*60+45, '🛋️', '放学回家 · 休息', '放松一会儿再开始'));
+  // 固定时间点：17:30 放学、18:30-19:00 晚饭、21:00-21:30 洗漱
+  const DINNER_START = 18*60+30;
+  const STUDY_END = 21*60;
 
-  let t = 17*60 + 45;
+  let t = 17*60+30;
+  items.push(lifeItem(t, t+15, '🛋️', '放学回家 · 休息', '放松一会儿再开始'));
+  t += 15;
 
-  // 晚饭前的自定义任务
+  // 晚饭前任务（截止 18:30）
   before.forEach((task, i) => {
-    const end = t + task.min;
-    items.push(studyItem(task, t, end));
-    t = end;
-    if(i < before.length - 1){
-      items.push(lifeItem(t, t+10, '🧘', '眼睛休息', '远眺 · 活动一下'));
-      t += 10;
+    const end = Math.min(t + task.min, DINNER_START);
+    if(end > t){
+      items.push(studyItem(task, t, end));
+      t = end;
+    }
+    if(i < before.length - 1 && t < DINNER_START){
+      items.push(lifeItem(t, Math.min(t+10, DINNER_START), '🧘', '眼睛休息', '远眺 · 活动一下'));
+      t = Math.min(t+10, DINNER_START);
     }
   });
 
-  // 晚饭
-  items.push(lifeItem(t, t+30, '🍚', '晚饭时间', '全家一起用餐'));
-  t += 30;
+  // 晚饭 18:30-19:00
+  items.push(lifeItem(DINNER_START, DINNER_START+30, '🍚', '晚饭时间', '全家一起用餐'));
+  t = DINNER_START + 30;
 
-  // 餐后休息
+  // 餐后休息 19:00-19:15
   items.push(lifeItem(t, t+15, '🧘', '餐后休息', '收拾桌面、准备学习'));
   t += 15;
 
-  // 晚饭后的标准任务
+  // 晚饭后任务（截止 21:00）
   after.forEach((task, i) => {
-    const end = t + task.min;
-    items.push(studyItem(task, t, end));
-    t = end;
-    if(i < after.length - 1){
-      items.push(lifeItem(t, t+10, '🧘', '眼睛休息', '远眺 · 活动一下'));
-      t += 10;
+    const end = Math.min(t + task.min, STUDY_END);
+    if(end > t){
+      items.push(studyItem(task, t, end));
+      t = end;
+    }
+    if(i < after.length - 1 && t < STUDY_END){
+      items.push(lifeItem(t, Math.min(t+10, STUDY_END), '🧘', '眼睛休息', '远眺 · 活动一下'));
+      t = Math.min(t+10, STUDY_END);
     }
   });
 
   // 吃点心
-  if(t < 21*60){
-    items.push(lifeItem(t, t+10, '🍎', '吃点心 · 休息', '补充能量'));
-    t += 10;
+  if(t < STUDY_END){
+    items.push(lifeItem(t, Math.min(t+10, STUDY_END), '🍎', '吃点心 · 休息', '补充能量'));
+    t = Math.min(t+10, STUDY_END);
   }
 
   // 亲子 / 自由时间
-  if(t < 21*60){
-    items.push(lifeItem(t, 21*60, '🎈', '亲子 / 自由时间', '聊天、游戏或自由安排'));
-    t = 21*60;
+  if(t < STUDY_END){
+    items.push(lifeItem(t, STUDY_END, '🎈', '亲子 / 自由时间', '聊天、游戏或自由安排'));
+    t = STUDY_END;
   }
 
-  // 洗漱（若学习已超过 21:00，则顺延到结束后洗漱）
-  const washStart = Math.max(21*60, t);
-  items.push(lifeItem(washStart, washStart+30, '🛁', '睡前洗漱', '准备睡觉 · 早睡早起'));
+  // 洗漱 21:00-21:30
+  items.push(lifeItem(21*60, 21*60+30, '🛁', '睡前洗漱', '准备睡觉 · 早睡早起'));
 
   return items.map(renderTlItem).join('');
 }
