@@ -176,6 +176,52 @@ app.post('/api/check/regenerate', async (req, res) => {
   }
 });
 
+/* 学习计划 · 家长确认页「输入即调整」：基于当前计划 + 家长要求，由大模型重新安排并返回 JSON */
+app.post('/api/plan/adjust', async (req, res) => {
+  const plan = (req.body?.plan || '').trim();
+  const request = (req.body?.request || '').trim();
+
+  if (!SPARK_ENABLED) {
+    return res.json({
+      reply: '[演示模式] 后端尚未配置星辰 MaaS 凭证，暂不能实时调整计划。',
+      tasks: []
+    });
+  }
+
+  const PLAN_ADJUST_SYSTEM_PROMPT = [
+    '你是「小满伴学」的 AI 计划调整助手。家长会提出对每日学习计划的调整要求。',
+    '请在原计划基础上，结合家长的要求，输出调整后的当日学习计划。',
+    '要求：',
+    '- 安排在放学后 17:30-21:30 之间，预留晚饭（约 30 分钟）、餐后休息（约 15 分钟）和睡前洗漱（约 30 分钟）。',
+    '- 任务时长合理，总学习时长不超过 3 小时。',
+    '- 只输出 JSON，格式为：{"reply":"对家长的一句话回复","tasks":[{"name":"任务名","icon":"emoji图标","desc":"一句话说明","min":分钟数,"beforeDinner":true或false}]}',
+    '- 不要输出 JSON 之外的任何文字。'
+  ].join('\n');
+
+  const userPrompt = `当前计划：\n${plan || '（暂无）'}\n\n家长调整要求：\n${request}`;
+
+  try {
+    const reply = await callSpark(
+      [{ role: 'user', content: userPrompt }],
+      { systemPrompt: PLAN_ADJUST_SYSTEM_PROMPT }
+    );
+    const jsonMatch = reply.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return res.json({
+        reply: parsed.reply || '已按你的要求调整好计划。',
+        tasks: Array.isArray(parsed.tasks) ? parsed.tasks : []
+      });
+    }
+    return res.json({ reply: reply.trim(), tasks: [] });
+  } catch (err) {
+    return res.status(502).json({
+      reply: '调整失败：' + (err && err.message ? err.message : '未知错误'),
+      tasks: []
+    });
+  }
+});
+
 /* ---------------- 启动 ---------------- */
 
 app.listen(PORT, () => {
