@@ -1279,15 +1279,17 @@ function clampStudyTasks(tasks){
     arrow: !!t.arrow,
     onclick: t.onclick || 'toggleTask(this)'
   }));
-  // 分时段硬预算：晚饭前 45 分钟、晚饭后 105 分钟，总学习时长不超过 150 分钟
+  // 分时段硬预算：预留眼睛休息间隔，晚饭前窗口 45 分钟、晚饭后窗口 105 分钟
   const scaleGroup = (group, budget) => {
     const total = group.reduce((s,t)=>s+t.min,0);
     if(total <= budget) return;
     const scale = budget / total;
     group.forEach(t => { t.min = Math.max(10, Math.round(t.min * scale)); });
   };
-  scaleGroup(out.filter(t=>t.beforeDinner), 45);
-  scaleGroup(out.filter(t=>!t.beforeDinner), 105);
+  const before = out.filter(t=>t.beforeDinner);
+  const after = out.filter(t=>!t.beforeDinner);
+  scaleGroup(before, Math.max(0, 45 - Math.max(0, before.length - 1) * 10));
+  scaleGroup(after, Math.max(0, 105 - Math.max(0, after.length - 1) * 10));
   return out;
 }
 
