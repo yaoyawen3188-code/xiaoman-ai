@@ -279,7 +279,7 @@ let streaming = false;
 let checkQStreaming = false;
 let lastAiReply = '';
 let aiPlan = '';
-let aiTasks = null;          // 大模型调整后返回的结构化学习任务
+let aiTasks = loadPlanState();          // 大模型调整后返回的结构化学习任务（本地持久化）
 let confirmReply = '';       // 确认页最近一次 AI 回复
 let confirmPlanBusy = false; // 确认页调整请求进行中标记
 
@@ -296,6 +296,48 @@ function saveProfileChat(msgs){
 }
 function resetProfileChat(){
   try{ localStorage.removeItem('xm_profile_chat'); }catch(e){}
+}
+
+/* ---------- 学习计划确认页对话历史持久化 ---------- */
+function loadConfirmChat(){
+  try{
+    const raw = localStorage.getItem('xm_confirm_chat');
+    if(!raw) return [];
+    return JSON.parse(raw);
+  }catch(e){ return []; }
+}
+function saveConfirmChat(msgs){
+  try{ localStorage.setItem('xm_confirm_chat', JSON.stringify(msgs)); }catch(e){}
+}
+function resetConfirmChat(){
+  try{ localStorage.removeItem('xm_confirm_chat'); }catch(e){}
+}
+
+/* ---------- 学习计划状态持久化（调整后的 aiTasks） ---------- */
+function loadPlanState(){
+  try{
+    const raw = localStorage.getItem('xm_plan_tasks');
+    if(!raw) return null;
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : null;
+  }catch(e){ return null; }
+}
+function savePlanState(tasks){
+  try{ localStorage.setItem('xm_plan_tasks', JSON.stringify(tasks)); }catch(e){}
+}
+
+/* ---------- 学习验收页 AI 问题持久化 ---------- */
+function loadCheckQ(){
+  try{
+    const raw = localStorage.getItem('xm_check_q');
+    if(!raw) return ['', '', ''];
+    const arr = JSON.parse(raw);
+    if(!Array.isArray(arr)) return ['', '', ''];
+    return arr.concat(['', '', '']).slice(0, 3);
+  }catch(e){ return ['', '', '']; }
+}
+function saveCheckQ(arr){
+  try{ localStorage.setItem('xm_check_q', JSON.stringify(arr)); }catch(e){}
 }
 
 /* ---------- 根据对话文本提取学习方向 ----------
@@ -396,6 +438,9 @@ function render(){
   const name = stack[stack.length-1];
   body.innerHTML = SCRENS[name]();
   body.scrollTop = 0;
+  if(name === 'confirm' || name === 'profile'){
+    body.scrollTop = body.scrollHeight;
+  }
   renderTabs();
   if (name==='profile') bindMic(body.querySelector('.mic'));
   if (name==='confirm') bindMic(body.querySelector('.mic'));
@@ -1085,14 +1130,20 @@ SCRENS.directions = ()=>`
 SCRENS.confirm = ()=>{
   const tasks = planTasks();
   const planItems = tasks.map((t,i) => `${i+1}. ${t.icon} ${t.name} · ${fmtMin(t.min)}`).join('<br>');
-  const adjusted = !!confirmReply;
-  const reply = confirmReply || '我根据伴学档案拟了一份<b>工作日计划</b>，安排在放学后 <b>17:30</b> 到睡前 <b>21:30</b>，中间预留晚饭、休息和睡前洗漱时间。请你逐项确认，或告诉我要调整的地方：';
-  const planLabel = adjusted ? '<b>📋 修改后的计划</b><br><br>' : '';
+  const msgs = loadConfirmChat();
+  const defaultMsg = '我根据伴学档案拟了一份<b>工作日计划</b>，安排在放学后 <b>17:30</b> 到睡前 <b>21:30</b>，中间预留晚饭、休息和睡前洗漱时间。请你逐项确认，或告诉我要调整的地方：';
+  const chatHtml = msgs.length ? msgs.map(m => {
+    const who = m.role === 'assistant' ? '小满 · AI 助手' : (m.fromVoice ? '家长 · 语音' : '家长 · 文字');
+    return `<div class="msg ${m.role}"><div class="who">${who}</div>${m.content}</div>`;
+  }).join('') : `<div class="msg ai"><div class="who">小满 · AI 助手</div>${defaultMsg}</div>`;
+  const planLabel = msgs.length ? '📋 修改后的计划' : '📋 学习计划';
   return `
 <div class="wrap fade" style="padding-bottom:80px">
-  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>学习计划 · 家长确认</h2><span></span></div>
-  <div class="chat">
-    <div class="msg ai"><div class="who">小满 · AI 助手</div>${reply}<br><br>${planLabel}${planItems || '（暂未生成具体任务，可先在「伴学」里补充时长要求）'}</div>
+  <div class="head"><div class="back" onclick="goBack()">‹</div><h2>学习计划 · 家长确认</h2>${msgs.length?'<button class="btn sm ghost" style="width:auto;padding:4px 10px;font-size:11px;margin-left:auto" onclick="resetConfirmChat();render()">重新确认</button>':''}</div>
+  <div class="chat">${chatHtml}</div>
+  <div class="card" style="margin:14px 16px 0">
+    <div style="font-weight:800;margin-bottom:8px">${planLabel}</div>
+    <div style="font-size:14px;line-height:1.9">${planItems || '（暂未生成具体任务，可先在「伴学」里补充时长要求）'}</div>
   </div>
   <div class="inputbar">
     <button class="mic" onclick="toggleMic(this)"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
@@ -1118,14 +1169,29 @@ async function adjustPlan(input){
   const tasks = planTasks();
   const planText = tasks.map((t,i) => `${i+1}. ${t.name}（${fmtMin(t.min)}${t.beforeDinner?'，晚饭前':'，晚饭后'}）`).join('\n');
 
+  // 家长消息（立即显示）
+  const d = document.createElement('div');
+  d.className = 'msg user';
+  d.innerHTML = '<div class="who">家长 · 文字</div>';
+  const pc = document.createElement('div'); pc.textContent = v;
+  d.appendChild(pc);
+  chat.appendChild(d);
   input.value = '';
-  confirmPlanBusy = true;
+  chat.scrollTop = chat.scrollHeight;
 
+  // 保存家长消息到确认页历史
+  let cm = loadConfirmChat();
+  cm.push({ role:'user', content:v, fromVoice:false });
+  saveConfirmChat(cm);
+
+  // AI 占位
   const aiMsg = document.createElement('div');
   aiMsg.className = 'msg ai';
   aiMsg.innerHTML = '<div class="who">小满 · AI 助手</div><div class="ai-content">正在按你的要求重新安排时间…</div>';
   chat.appendChild(aiMsg);
   chat.scrollTop = chat.scrollHeight;
+
+  confirmPlanBusy = true;
 
   try {
     const res = await fetch('/api/plan/adjust', {
@@ -1145,15 +1211,26 @@ async function adjustPlan(input){
         min: Math.max(1, Math.min(180, Number(t.min) || 20)),
         beforeDinner: !!t.beforeDinner
       }));
+      savePlanState(aiTasks);
     }
     let replyText = (data.reply || '已按你的要求调整好计划，请确认。').trim();
     if(replyText.includes('？') || replyText.includes('?')){
       replyText = '已按你的要求调整好计划，请确认。';
     }
     confirmReply = replyText;
+
+    // 保存 AI 回复到确认页历史
+    cm = loadConfirmChat();
+    cm.push({ role:'assistant', content: replyText });
+    saveConfirmChat(cm);
     render();
   } catch(err){
-    aiMsg.querySelector('.ai-content').textContent = '⚠️ 调整失败：' + err.message;
+    const errText = '⚠️ 调整失败：' + err.message;
+    aiMsg.querySelector('.ai-content').textContent = errText;
+    const cm2 = loadConfirmChat();
+    cm2.push({ role:'assistant', content: errText });
+    saveConfirmChat(cm2);
+    render();
   } finally {
     confirmPlanBusy = false;
   }
@@ -1605,7 +1682,7 @@ const CHECK_QS = [
   ]}
 ];
 let checkQIndex = [0,0,0];
-let checkQText = ['', '', ''];
+let checkQText = loadCheckQ();
 const CHECK_CONTEXT = [
   '学习验收结果：阅读、口算、口语、兴趣打卡均已完成，作业正确率 96%，阅读专注度高',
   '孩子情绪：积极专注，状态饱满，愿意分享',
@@ -1626,6 +1703,7 @@ async function swapCheckQ(i){
     const q = (data && data.question) ? String(data.question).trim() : '';
     if(q){
       checkQText[i] = q;
+      saveCheckQ(checkQText);
       render();
       toast('已换一个新问题');
     } else {
