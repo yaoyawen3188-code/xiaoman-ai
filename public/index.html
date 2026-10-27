@@ -400,14 +400,13 @@ function genDirCards(text){
   const ctxTag = { tt:'同步练习', read:'兴趣书单', calc:'校内同步', oral:'教材同步', other:'每日打卡' };
   return dirs.map(d => {
     const color = colorOf(d.key);
-    const beforeTag = d.beforeDinner ? `<span class="tag amber">晚饭前</span>` : '';
     const readBtn = d.key === 'read' ? `<button class="btn sm mint" style="margin-top:10px;width:auto;padding:8px 14px" onclick="push('reading')">查看书单 →</button>` : '';
     return `<div class="dir-card">
       <div class="icon ${color}">${d.icon}</div>
       <div class="body">
         <h4>${d.title}</h4>
         <p>${d.desc}</p>
-        <div class="meta"><span class="tag ${color}">${fmtMin(d.min)}</span><span class="tag indigo">${ctxTag[d.key]}</span>${beforeTag}</div>
+        <div class="meta"><span class="tag indigo">${ctxTag[d.key]}</span></div>
         ${readBtn}
       </div>
     </div>`;
@@ -1095,7 +1094,7 @@ SCRENS.directions = ()=>`
       <div class="body">
         <h4>阅读能力</h4>
         <p>符合年龄 + 兴趣的书单（如《神奇校车》系列），科学拆分每日阅读时间。</p>
-        <div class="meta"><span class="tag mint">每天 20 分钟</span><span class="tag coral">兴趣书单</span></div>
+        <div class="meta"><span class="tag coral">兴趣书单</span></div>
         <button class="btn sm mint" style="margin-top:10px;width:auto;padding:8px 14px" onclick="push('reading')">查看书单 →</button>
       </div>
     </div>
@@ -1104,7 +1103,7 @@ SCRENS.directions = ()=>`
       <div class="body">
         <h4>计算能力</h4>
         <p>结合校内任务与口算练习，按兴趣安排每日时长，保持数学状态。</p>
-        <div class="meta"><span class="tag amber">每天 15 分钟</span><span class="tag indigo">校内同步</span></div>
+        <div class="meta"><span class="tag indigo">校内同步</span></div>
       </div>
     </div>
     <div class="dir-card">
@@ -1112,7 +1111,7 @@ SCRENS.directions = ()=>`
       <div class="body">
         <h4>口语陪练</h4>
         <p>AI 按子涵英语水平扮演英语老师陪练，内容同步学校教材并适当扩展。</p>
-        <div class="meta"><span class="tag coral">每天 15 分钟</span><span class="tag indigo">学校教材同步</span><span class="tag mint">克隆音色</span></div>
+        <div class="meta"><span class="tag indigo">学校教材同步</span><span class="tag mint">克隆音色</span></div>
       </div>
     </div>
     <div class="dir-card">
