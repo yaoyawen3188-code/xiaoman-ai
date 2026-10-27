@@ -288,6 +288,10 @@ function syncProfileChatHistory(){
   const msgs = loadProfileChat();
   if(msgs.length){
     chatHistory = msgs.map(m => ({ role: m.role, content: m.content }));
+    if(!lastAiReply){
+      const lastAssistant = msgs.filter(m => m.role === 'assistant').pop();
+      if(lastAssistant) lastAiReply = lastAssistant.content;
+    }
   }
 }
 
