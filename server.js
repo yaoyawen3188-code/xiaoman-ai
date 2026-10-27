@@ -176,6 +176,122 @@ app.post('/api/check/regenerate', async (req, res) => {
   }
 });
 
+/* ---------- 家长明确指定时长的确定性兜底 ----------
+   大模型有时会为了总时长平衡，把家长明确要求的「1 小时」改成 30 分钟。
+   这里在返回前做一次确定性校正：从家长要求中解析时长，并把匹配到的任务
+   min 改成家长说的时间。 */
+function cnToInt(s){
+  if (!s) return null;
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  const map = { 零:0, 一:1, 二:2, 两:2, 三:3, 四:4, 五:5, 六:6, 七:7, 八:8, 九:9, 十:10 };
+  if (s.length === 1) return map[s] === undefined ? null : map[s];
+  if (s.indexOf('十') >= 0) {
+    const parts = s.split('十');
+    const tens = parts[0] ? map[parts[0]] : 1;
+    const ones = parts[1] ? map[parts[1]] : 0;
+    return tens * 10 + ones;
+  }
+  return null;
+}
+
+function normalizeDurationText(min){
+  if (min >= 60 && min % 60 === 0) return (min / 60) + ' 小时';
+  if (min >= 60) return Math.floor(min / 60) + ' 小时 ' + (min % 60) + ' 分钟';
+  return min + ' 分钟';
+}
+
+function parseRequestedDuration(text){
+  const s = (text || '').trim();
+  if (!s) return null;
+
+  // 一个半小时 / 两个半小时
+  let m = s.match(/([一二两三四五六七八九十]+)?半\s*小时/);
+  if (m) {
+    const base = cnToInt(m[1] || '一');
+    if (base) return { min: Math.round((base + 0.5) * 60), unit: '小时' };
+  }
+
+  m = s.match(/(\d+|[一二两三四五六七八九十]+)\s*(?:个)?\s*小时/);
+  if (m) {
+    const n = cnToInt(m[1]);
+    if (n) return { min: n * 60, unit: '小时' };
+  }
+
+  m = s.match(/(\d+|[一二两三四五六七八九十]+)\s*(?:个)?\s*分钟/);
+  if (m) {
+    const n = cnToInt(m[1]);
+    if (n) return { min: n, unit: '分钟' };
+  }
+
+  m = s.match(/(\d+|[一二两三四五六七八九十]+)\s*(?:个)?\s*min/i);
+  if (m) {
+    const n = cnToInt(m[1]);
+    if (n) return { min: n, unit: 'min' };
+  }
+
+  return null;
+}
+
+function taskMatchScore(task, request){
+  const name = String(task.name || '');
+  const desc = String(task.desc || '');
+  const haystack = name + ' ' + desc;
+  const candidates = [];
+
+  for (const part of name.split(/[\s·，,、\-—:：/|]+/)) {
+    if (part.length >= 2) candidates.push(part);
+  }
+
+  if (/天天练|数学练习|每日练习|每日练/.test(haystack)) {
+    candidates.push('数学天天练', '学习天天练', '天天练', '数学练习');
+  }
+  if (/阅读|书单|书籍|绘本/.test(haystack)) {
+    candidates.push('阅读', '书单', '书籍', '绘本');
+  }
+  if (/计算|口算|算术/.test(haystack)) {
+    candidates.push('计算', '口算', '算术');
+  }
+  if (/口语|英语|陪练|跟读/.test(haystack)) {
+    candidates.push('口语', '英语', '陪练', '跟读');
+  }
+  if (/钢琴|围棋|兴趣|运动|习惯/.test(haystack)) {
+    candidates.push('钢琴', '围棋', '兴趣', '运动', '习惯');
+  }
+
+  let best = 0;
+  for (const c of candidates) {
+    if (request.indexOf(c) >= 0 && c.length > best) best = c.length;
+  }
+  return best;
+}
+
+function applyRequestedDurationToTasks(parsed, request){
+  if (!parsed || !Array.isArray(parsed.tasks)) return { changed: false };
+  const duration = parseRequestedDuration(request);
+  if (!duration) return { changed: false };
+
+  let bestIndex = -1;
+  let bestScore = 0;
+  parsed.tasks.forEach((task, i) => {
+    const score = taskMatchScore(task, request);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  });
+
+  if (bestIndex < 0) return { changed: false };
+  const task = parsed.tasks[bestIndex];
+  const min = Math.max(10, Math.min(60, duration.min));
+  task.min = min;
+
+  if (task.desc) {
+    task.desc = String(task.desc).replace(/\d+(\.\d+)?\s*(?:个)?\s*(小时|分钟|min)/gi, normalizeDurationText(min));
+  }
+
+  return { changed: true, taskName: task.name || '该任务', min };
+}
+
 /* 学习计划 · 家长确认页「输入即调整」：基于当前计划 + 家长要求，由大模型重新安排并返回 JSON */
 app.post('/api/plan/adjust', async (req, res) => {
   const plan = (req.body?.plan || '').trim();
@@ -197,7 +313,8 @@ app.post('/api/plan/adjust', async (req, res) => {
     '- 因此学习/兴趣任务的总时长不超过 150 分钟，每项时长 10-60 分钟。',
     '- 学习任务安排在 17:45-18:30（晚饭前）和 19:15-21:00（晚饭后）两段。',
     '- tasks 只放学习/兴趣类任务（阅读、计算、口语、兴趣班、家长新加任务等），不要把晚饭、休息、洗漱放进 tasks。',
-    '- 家长明确要加的新任务必须加入；家长要求调整时长的，按新时长调整。',
+    '- 家长明确要加的新任务必须加入；家长要求调整时长的，必须按新时长调整。',
+    '- 家长明确指定的任务时长优先：家长说 1 小时，该任务 min 必须是 60；家长说 30 分钟，min 必须是 30。不得为了凑总时长而压缩家长明确指定的任务，应优先压缩其他任务或调整顺序。',
     '- 原计划中已有任务的名称和类型尽量保留，不要改名叫「任务一/任务二」。',
     '- reply 只能是简短确认，例如「已按你的要求调整好计划，请确认」，不要反问、不要寒暄、不要请求更多信息。',
     '- 只输出 JSON，格式为：{"reply":"对家长的一句话回复","tasks":[{"name":"任务名","icon":"emoji图标","desc":"一句话说明","min":分钟数,"beforeDinner":true或false}]}',
@@ -214,9 +331,13 @@ app.post('/api/plan/adjust', async (req, res) => {
     const jsonMatch = reply.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
+      if (!Array.isArray(parsed.tasks)) parsed.tasks = [];
+      const applied = applyRequestedDurationToTasks(parsed, request);
       return res.json({
-        reply: parsed.reply || '已按你的要求调整好计划。',
-        tasks: Array.isArray(parsed.tasks) ? parsed.tasks : []
+        reply: applied.changed
+          ? `已将「${applied.taskName}」调整为 ${normalizeDurationText(applied.min)}，请确认。`
+          : (parsed.reply || '已按你的要求调整好计划。'),
+        tasks: parsed.tasks
       });
     }
     return res.json({ reply: reply.trim(), tasks: [] });
