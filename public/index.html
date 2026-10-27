@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+﻿﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -284,6 +284,13 @@ let confirmReply = '';       // 确认页最近一次 AI 回复
 let confirmPlanBusy = false; // 确认页调整请求进行中标记
 
 /* ---------- 伴学页历史持久化 ---------- */
+function syncProfileChatHistory(){
+  const msgs = loadProfileChat();
+  if(msgs.length){
+    chatHistory = msgs.map(m => ({ role: m.role, content: m.content }));
+  }
+}
+
 function loadProfileChat(){
   try{
     const raw = localStorage.getItem('xm_profile_chat');
@@ -296,6 +303,7 @@ function saveProfileChat(msgs){
 }
 function resetProfileChat(){
   try{ localStorage.removeItem('xm_profile_chat'); }catch(e){}
+  chatHistory = [];
 }
 
 /* ---------- 学习计划确认页对话历史持久化 ---------- */
@@ -487,13 +495,20 @@ async function sendText(input){
     pm.push({ role:'user', content:v, fromVoice });
     saveProfileChat(pm);
   }
-  // 家长说「去掉某本书」时，从书单移除；说「加入书单」时，从上一轮 AI 回复提取书名
+  // 家长说「去掉某本书」时，从书单移除；说「加入书单」时，从上一轮 AI 回复提取书名。
+  // 书籍增删改先改数据并提示，等本轮 AI 回复完成后统一 render，避免聊天被提前重绘打断。
+  let bookChanged = false;
   const removed = removeBooksFromText(v);
   if(removed.length){
     toast(`已从书单移除 ${removed.length} 本：${removed.map(t=>t).join('、')}`);
-    render();
+    bookChanged = true;
   }
-  if(/加入书单|加书单/.test(v)){ addAiBooks(removed); }
+  if(/加入书单|加书单/.test(v)){
+    const shouldReplace = /替代|替换|覆盖|换成|清空/.test(v);
+    if(addAiBooks(removed, shouldReplace)){
+      bookChanged = true;
+    }
+  }
   streaming = true;
 
   const scrollChat = () => { chat.scrollTop = chat.scrollHeight; };
@@ -554,7 +569,11 @@ async function sendText(input){
     scrollChat();
   } finally {
     streaming = false;
-    scrollChat();
+    if(bookChanged){
+      render();
+    } else {
+      scrollChat();
+    }
   }
 }
 function renderTabs(){
@@ -719,6 +738,7 @@ function setCloneVoice(name){
 }
 
 SCRENS.profile = ()=>{
+  syncProfileChatHistory();
   const msgs = loadProfileChat();
   const defaultChat = `
     <div class="msg ai"><div class="who">小满 · AI 助手</div>你好呀～我是「小满」🌱<br>为了给<b>子涵</b>制定科学计划，我会用语音逐项采集：<b>年龄、年级、性别、兴趣（IP / 人物 / 音乐 / 书籍）、兴趣班、培养期望</b>。按下方麦克风说话即可，也能打字补充。</div>
@@ -879,12 +899,45 @@ function extractBookTitles(text){
   return Array.from(set);
 }
 
-function addAiBooks(excludeTitles){
+function addAiBooks(excludeTitles, replaceAll){
   const titles = extractBookTitles(lastAiReply);
   if(!titles.length){
     toast('AI 回复里没有识别到《书名》。可到「兴趣书单」页用「＋添加书籍」手动添加。');
-    return;
+    return false;
   }
+
+  if(replaceAll){
+    // 替代现有书单：保留 AI 推荐里与现有书单匹配的书，去掉其余旧书，再补齐新书。
+    const kept = [];
+    for(const t of titles){
+      const exist = BOOKS.find(b => b.title.includes(t) || t.includes(b.title));
+      if(exist) kept.push(exist);
+    }
+    BOOKS.length = 0;
+    BOOKS.push(...kept);
+    const remainingIds = new Set(BOOKS.map(b => b.id));
+    planBookIds.splice(0, planBookIds.length, ...planBookIds.filter(id => remainingIds.has(id)));
+
+    let added = 0;
+    for(const t of titles){
+      const exist = BOOKS.find(b => b.title.includes(t) || t.includes(b.title));
+      if(exist) continue;
+      if(excludeTitles && excludeTitles.some(x => x.includes(t) || t.includes(x))) continue;
+      BOOKS.push({
+        id: 'bk' + Date.now().toString(36) + Math.random().toString(36).slice(2,5),
+        icon: '📖',
+        title: t,
+        author: 'AI 推荐',
+        duration: 20,
+        reason: '来自「伴学」对话里 AI 的推荐',
+        chapters: [{ t: '第 1 章 · 已加入书单', done: false }]
+      });
+      added++;
+    }
+    toast(replaceAll && added >= 0 ? `已用 AI 推荐书单替换现有书单，新增 ${added} 本` : `已把 ${added} 本书加入书单 ✓`);
+    return true;
+  }
+
   let added = 0;
   for(const t of titles){
     if(excludeTitles && excludeTitles.some(x => x.includes(t) || t.includes(x))) continue;
@@ -903,10 +956,10 @@ function addAiBooks(excludeTitles){
   }
   if(added){
     toast(`已把 ${added} 本书加入书单 ✓`);
-    render();
   } else {
     toast('这些书已经在书单里了');
   }
+  return added > 0;
 }
 
 /* ---------- 从家长的话里识别要移除的书名 ---------- */
@@ -1906,3 +1959,4 @@ renderDev();
 </script>
 </body>
 </html>
+
