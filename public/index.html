@@ -745,13 +745,7 @@ SCRENS.profile = ()=>{
   syncProfileChatHistory();
   const msgs = loadProfileChat();
   const defaultChat = `
-    <div class="msg ai"><div class="who">小满 · AI 助手</div>你好呀～我是「小满」🌱<br>为了给<b>子涵</b>制定科学计划，我会用语音逐项采集：<b>年龄、年级、性别、兴趣（IP / 人物 / 音乐 / 书籍）、兴趣班、培养期望</b>。按下方麦克风说话即可，也能打字补充。</div>
-    <div class="msg user"><div class="who">家长 · 语音</div>孩子8岁，二年级，男孩。<div class="voice-hint">第 1 步 · 年龄 / 年级 / 性别</div></div>
-    <div class="msg ai"><div class="who">小满 · AI 助手</div>收到～平时喜欢哪些 IP、人物、音乐或书籍？现在在上什么兴趣班？</div>
-    <div class="msg user"><div class="who">家长 · 语音</div>喜欢奥特曼和汪汪队，爱看《神奇校车》，在上钢琴和围棋班。<div class="voice-hint">第 2 步 · 兴趣 / IP / 兴趣班</div></div>
-    <div class="msg ai"><div class="who">小满 · AI 助手</div>太棒了！最后，你希望重点培养哪方面？阅读、计算、口语，还是全面发展？</div>
-    <div class="msg user"><div class="who">家长 · 语音</div>希望阅读和口语加强，数学保持就好。<div class="voice-hint">第 3 步 · 培养期望</div></div>
-    <div class="msg ai"><div class="who">小满 · AI 助手</div>好嘞，子涵的档案已整理 ✅<br>接下来我会给出 <b>阅读 / 计算 / 口语陪练 / 其他</b> 四个学习方向，你确认后我就生成每日计划。</div>`;
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>你好呀～我是「小满」🌱 想给<b>子涵</b>定制专属学习计划，直接告诉我就好，比如：<br>· <b>「孩子8岁，二年级，男孩，喜欢奥特曼和汪汪队，爱看《神奇校车》，在上钢琴和围棋班，希望阅读和口语加强」</b><br>· <b>「给我推荐几本书」</b><br>· <b>「把阅读能力作为单独一个学习方向」</b><br><br>我都会记下来，帮你一步步安排～ 也可以点下方麦克风用语音说 🎤</div>`;
   const chatHtml = msgs.length ? msgs.map(m => {
     const who = m.role === 'assistant' ? '小满 · AI 助手' : (m.fromVoice ? '家长 · 语音' : '家长 · 文字');
     return `<div class="msg ${m.role}"><div class="who">${who}</div>${m.content}</div>`;
