@@ -634,11 +634,15 @@ async function sendText(input){
   const scrollChat = () => { chat.scrollTop = chat.scrollHeight; };
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: chatHistory })
+      body: JSON.stringify({ messages: chatHistory }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     if(!res.ok || !res.body) throw new Error('HTTP ' + res.status);
 
     const reader = res.body.getReader();
@@ -1175,7 +1179,11 @@ async function gotoDirections(){
   if(ti && ti.value.trim() && !streaming){
     const btn = document.getElementById('nextBtn');
     if(btn){ btn.textContent = 'AI 正在生成…'; btn.disabled = true; }
-    await sendText(ti);
+    try {
+      await sendText(ti);
+    } catch(e) {
+      // AI 请求异常时仍继续跳转，避免卡在伴学页
+    }
     if(btn){ btn.textContent = '下一步 →'; btn.disabled = false; }
   }
   // 把整个伴学对话（家长要求 + AI 回复）作为学习方向依据
