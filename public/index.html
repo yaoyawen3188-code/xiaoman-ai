@@ -324,7 +324,29 @@ function loadProfileChat(){
   }catch(e){ return []; }
 }
 function saveProfileChat(msgs){
-  try{ localStorage.setItem('xm_profile_chat', JSON.stringify(msgs)); }catch(e){}
+  try{
+    localStorage.setItem('xm_profile_chat', JSON.stringify(msgs));
+    bumpProfileVersion();
+  }catch(e){}
+}
+function getProfileVersion(){
+  try{ return Number(localStorage.getItem('xm_profile_version') || 0); }catch(e){ return 0; }
+}
+function bumpProfileVersion(){
+  try{
+    const v = getProfileVersion() + 1;
+    localStorage.setItem('xm_profile_version', String(v));
+    return v;
+  }catch(e){ return 0; }
+}
+function saveConfirmedVersion(){
+  try{ localStorage.setItem('xm_plan_confirmed_version', String(getProfileVersion())); }catch(e){}
+}
+function getConfirmedVersion(){
+  try{ return Number(localStorage.getItem('xm_plan_confirmed_version') || 0); }catch(e){ return 0; }
+}
+function hasProfileUpdate(){
+  return getProfileVersion() > getConfirmedVersion();
 }
 function resetProfileChat(){
   try{ localStorage.removeItem('xm_profile_chat'); }catch(e){}
@@ -1442,7 +1464,10 @@ SCRENS.status = ()=>`
   <button class="btn ghost" style="margin-top:10px" onclick="gotoDirections()">生成明日学习计划</button>
 </div>`;
 
-SCRENS.directions = ()=>`
+SCRENS.directions = ()=>{
+  const planConfirmed = !!(aiTasks && aiTasks.length);
+  const hasUpdate = hasProfileUpdate();
+  return `
 <div class="wrap fade">
   <div class="head"><div class="back" onclick="goBack()">‹</div><h2>AI 学习方向</h2><span class="tag ${aiPlan?'mint':'amber'}">${aiPlan?'AI 生成':'示例'}</span></div>
   ${aiPlan ? `
@@ -1484,8 +1509,13 @@ SCRENS.directions = ()=>`
     </div>
   `}
   ${genAppCards()}
-  <button class="btn" onclick="push('confirm')">进入计划确认</button>
+  ${planConfirmed ? (hasUpdate
+    ? `<button class="btn" onclick="push('confirm')">更新计划</button>
+       <button class="btn ghost" style="margin-top:10px" onclick="goto('home')">查看计划</button>`
+    : `<button class="btn" onclick="goto('home')">查看计划</button>`)
+  : `<button class="btn" onclick="push('confirm')">进入计划确认</button>`}
 </div>`;
+};
 
 SCRENS.confirm = ()=>{
   const tasks = planTasks();
@@ -1514,6 +1544,7 @@ SCRENS.confirm = ()=>{
 };
 
 function confirmPlan(){
+  saveConfirmedVersion();
   toast('学习计划已确认，并下发到「小满」设备 🤖');
   goto('home');
 }
