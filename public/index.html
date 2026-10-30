@@ -262,6 +262,25 @@ h1{font-size:38px;line-height:1.15;margin:14px 0 10px;letter-spacing:-.02em;font
 @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#2A2520;color:#fff;padding:11px 18px;border-radius:14px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:99;box-shadow:0 14px 30px -12px rgba(0,0,0,.4);max-width:80vw;text-align:center}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* app creation form */
+.app-form{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;margin-top:12px}
+.app-form h4{font-size:14.5px;font-weight:800;margin-bottom:10px}
+.app-preview{background:#FFF8EE;border:1px solid #F2E2C6;border-radius:16px;padding:14px;margin-top:10px}
+.app-preview .pv-title{font-weight:800;font-size:15px;display:flex;align-items:center;gap:8px}
+.diff-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:5px 11px;border-radius:999px;border:1.5px solid var(--line);cursor:pointer;transition:.15s;background:#fff}
+.diff-chip.sel{border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}
+.diff-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.sent-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px 15px;margin-top:10px;display:flex;gap:10px;align-items:center}
+.sent-card .en{font-size:15px;font-weight:700;color:var(--ink)}
+.sent-card .zh{font-size:12px;color:var(--muted);margin-top:2px}
+.sent-card .tts-btn{width:38px;height:38px;border-radius:11px;background:var(--mint-soft);color:var(--mint);display:grid;place-items:center;cursor:pointer;flex:none;border:0;font-size:16px}
+.app-icon-lg{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;font-size:26px;flex:none}
+.dur-selector{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.dur-chip{font-size:11.5px;font-weight:700;padding:6px 13px;border-radius:999px;border:1.5px solid var(--line);cursor:pointer;transition:.15s;background:#fff}
+.dur-chip.sel{border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}
+.app-task-card{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:11px}
+.app-task-card .at-icon{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:22px;flex:none}
 </style>
 <script>
 /* ---------- 状态 ---------- */
@@ -350,6 +369,19 @@ function loadCheckQ(){
 }
 function saveCheckQ(arr){
   try{ localStorage.setItem('xm_check_q', JSON.stringify(arr)); }catch(e){}
+}
+
+/* ---------- 可交互学习活动应用持久化 ---------- */
+function loadApps(){
+  try{
+    const raw = localStorage.getItem('xm_apps');
+    if(!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  }catch(e){ return []; }
+}
+function saveApps(apps){
+  try{ localStorage.setItem('xm_apps', JSON.stringify(apps)); }catch(e){}
 }
 
 /* ---------- 根据对话文本提取学习方向 ----------
@@ -745,7 +777,7 @@ SCRENS.profile = ()=>{
   syncProfileChatHistory();
   const msgs = loadProfileChat();
   const defaultChat = `
-    <div class="msg ai"><div class="who">小满 · AI 助手</div>你好呀～我是「小满」🌱 想给<b>子涵</b>定制专属学习计划，直接告诉我就好，比如：<br>· <b>「孩子8岁，二年级，男孩，喜欢奥特曼和汪汪队，爱看《神奇校车》，在上钢琴和围棋班，希望阅读和口语加强」</b><br>· <b>「给我推荐几本书」</b><br>· <b>「把阅读能力作为单独一个学习方向」</b><br><br>我都会记下来，帮你一步步安排～ 也可以点下方麦克风用语音说 🎤</div>`;
+    <div class="msg ai"><div class="who">小满 · AI 助手</div>你好呀～我是「小满」🌱 想给<b>子涵</b>定制专属学习计划，直接告诉我就好，比如：<br>· <b>「孩子8岁，二年级，男孩，喜欢奥特曼和汪汪队，爱看《神奇校车》，在上钢琴和围棋班，希望阅读和口语加强」</b><br>· <b>「给我推荐几本书」</b><br>· <b>「把阅读能力作为单独一个学习方向」</b><br>· <b>「帮我做个口语练习的活动页面…」</b><br><br>我都会记下来，帮你一步步安排～ 也可以点下方麦克风用语音说 🎤</div>`;
   const chatHtml = msgs.length ? msgs.map(m => {
     const who = m.role === 'assistant' ? '小满 · AI 助手' : (m.fromVoice ? '家长 · 语音' : '家长 · 文字');
     return `<div class="msg ${m.role}"><div class="who">${who}</div>${m.content}</div>`;
@@ -754,7 +786,11 @@ SCRENS.profile = ()=>{
 <div class="wrap fade" style="padding-bottom:80px">
   <div class="head"><div class="back" onclick="goBack()">‹</div><h2>AI 伴学 · 定制专属学习目标</h2>${msgs.length?'<button class="btn sm ghost" style="width:auto;padding:4px 10px;font-size:11px;margin-left:auto" onclick="resetProfileChat();render()">重新采集</button>':''}</div>
   <div class="chat">${chatHtml}</div>
-  <button class="btn" style="margin:14px 16px 0" id="nextBtn" onclick="gotoDirections()">下一步 →</button>
+  <div style="display:flex;gap:10px;margin:14px 16px 0">
+    <button class="btn" style="flex:1" id="nextBtn" onclick="gotoDirections()">下一步 →</button>
+    <button class="btn ghost" style="width:auto;padding:13px 18px;font-size:13.5px" onclick="toggleAppForm()">🎮 创建活动</button>
+  </div>
+  ${renderAppForm()}
   <div class="inputbar">
     <button class="mic" onclick="toggleMic(this)"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
     <input class="textbox" placeholder="或文字补充…">
@@ -766,6 +802,160 @@ function toggleMic(el){
   const bar = el.closest('.inputbar');
   const input = bar ? bar.querySelector('.textbox') : null;
   startVoice(el, { input });
+}
+
+/* ---------- 伴学 · 创建可交互学习活动应用 ---------- */
+let __appFormOpen = false;
+let __pendingApp = null;   // 等待确认的 App spec
+let __appVoiceInput = null; // 语音识别中引用
+
+function toggleAppForm(){
+  __appFormOpen = !__appFormOpen;
+  if(__appFormOpen){
+    render();
+    // 滚动到表单
+    setTimeout(()=>{
+      const f = document.getElementById('appFormArea');
+      if(f) f.scrollIntoView({ behavior:'smooth', block:'center' });
+    }, 100);
+  } else {
+    render();
+  }
+}
+
+function renderAppForm(){
+  if(!__appFormOpen) return '';
+  return `
+  <div id="appFormArea">
+    <div class="app-form">
+      <h4>🎯 创建可交互学习活动</h4>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">描述你想要的活动，AI 会生成一个可在设备端运行的互动应用。例如：</p>
+      <div style="background:#FAF5EC;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#7A6A58;line-height:1.6">
+        「帮我做个口语练习的活动页面，点击后就开始，以 PEP 四年级上册 Unit1 为内容，我可以选择扩展难度。低：完全以课文内容为主，中：适当增加场景衍生，联系前后内容；高：增加教材外的相关场景内容。还可以选择互动时间长度」
+      </div>
+      <textarea id="appInstructions" class="textbox" placeholder="描述你的活动需求…" style="width:100%;min-height:70px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px;font-size:13.5px;font-family:inherit;outline:none;resize:vertical;line-height:1.6">${__pendingApp? '' : ''}</textarea>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="mic" id="appMicBtn" style="width:40px;height:40px;flex-shrink:0" onclick="toggleAppMic(this)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+        </button>
+        <button class="btn sm mint" style="width:auto;padding:9px 16px;font-size:13px" onclick="generateApp()">✨ AI 生成活动</button>
+        <button class="btn sm ghost" style="width:auto;padding:9px 16px;font-size:13px" onclick="toggleAppForm()">取消</button>
+      </div>
+      <div id="appMicHint" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
+      <div id="appPreviewArea"></div>
+    </div>
+  </div>`;
+}
+
+function toggleAppMic(el){
+  const hint = document.getElementById('appMicHint');
+  const input = document.getElementById('appInstructions');
+  startVoice(el, {
+    input,
+    hint,
+    onDone: (text)=>{
+      if(text && input){
+        input.value = text;
+        if(hint) hint.textContent = '语音已识别 ✓';
+      }
+    }
+  });
+}
+
+async function generateApp(){
+  const inp = document.getElementById('appInstructions');
+  const v = (inp && inp.value || '').trim();
+  if(!v){
+    toast('请先描述你想要的活动');
+    return;
+  }
+  const btn = event?.target;
+  if(btn){ btn.textContent = 'AI 正在生成…'; btn.disabled = true; }
+
+  // 显示加载状态
+  const previewArea = document.getElementById('appPreviewArea');
+  if(previewArea){
+    previewArea.innerHTML = `<div class="app-preview" style="text-align:center;padding:20px"><div style="font-size:13px;color:var(--muted)">🤖 AI 正在为你创建活动…</div></div>`;
+  }
+
+  try {
+    const res = await fetch('/api/app/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instructions: v })
+    });
+    const data = await res.json().catch(() => ({ error: '无效响应' }));
+    if(!res.ok || data.error){
+      throw new Error(data.error || 'HTTP ' + res.status);
+    }
+    __pendingApp = data;
+    renderPreview();
+  } catch(err) {
+    const previewArea2 = document.getElementById('appPreviewArea');
+    if(previewArea2){
+      previewArea2.innerHTML = `<div class="app-preview" style="text-align:center;padding:20px"><div style="font-size:13px;color:#E2574C">⚠️ ${err.message || '创建失败，请稍后重试'}</div></div>`;
+    }
+  } finally {
+    if(btn){ btn.textContent = '✨ AI 生成活动'; btn.disabled = false; }
+  }
+}
+
+function renderPreview(){
+  const area = document.getElementById('appPreviewArea');
+  if(!area || !__pendingApp) return;
+  const app = __pendingApp;
+  const typeLabel = { oral:'🗣️ 口语练习', reading:'📖 阅读理解', quiz:'❓ 知识问答', other:'🎮 互动活动' }[app.type] || '🎮 互动活动';
+  const diffHtml = (app.difficulties || []).map(d => {
+    const items = (d.items || []).slice(0, 2).map(it => {
+      if(it.en) return `<div style="font-size:12px;color:var(--muted);margin-top:3px">${it.en} <span style="color:#B26A1E">· ${it.zh||''}</span></div>`;
+      return `<div style="font-size:12px;color:var(--muted);margin-top:3px">${it.q || it.text || ''}</div>`;
+    }).join('');
+    return `<div style="margin-top:6px">
+      <div style="font-size:12px;font-weight:700;color:var(--ink)">${d.level} · ${d.desc||''}</div>
+      ${items}
+    </div>`;
+  }).join('');
+
+  area.innerHTML = `
+    <div class="app-preview">
+      <div class="pv-title">${app.icon || '🎮'} ${app.title}</div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:4px">${typeLabel} · 建议时长 ${app.duration || 15} 分钟</div>
+      <div style="font-size:12.5px;color:var(--ink);margin-top:8px;line-height:1.5">${app.content || ''}</div>
+      ${diffHtml ? `<div style="margin-top:10px;border-top:1px solid #F2E2C6;padding-top:8px"><div style="font-size:11px;font-weight:800;color:#B26A1E;margin-bottom:4px">难度设置</div>${diffHtml}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn mint" style="width:auto;padding:9px 16px;font-size:13px" onclick="confirmApp()">✅ 确认添加</button>
+        <button class="btn ghost" style="width:auto;padding:9px 16px;font-size:13px" onclick="__appFormOpen=false;render()">取消</button>
+      </div>
+    </div>`;
+}
+
+function confirmApp(){
+  if(!__pendingApp) return;
+  const app = __pendingApp;
+  const apps = loadApps();
+  const newApp = Object.assign({ id: 'app' + Date.now().toString(36) + Math.random().toString(36).slice(2,5) }, app);
+  apps.push(newApp);
+  saveApps(apps);
+
+  // 添加到计划任务
+  aiTasks = aiTasks || [];
+  aiTasks.push({
+    name: app.title || '学习活动',
+    icon: app.icon || '🎮',
+    desc: `${app.duration || 15} 分钟 · 互动活动`,
+    min: Math.max(10, Math.min(60, app.duration || 15)),
+    beforeDinner: false,
+    appType: app.type,
+    appId: newApp.id,
+    arrow: true,
+    onclick: `devGo('app:${newApp.id}')`
+  });
+  savePlanState(aiTasks);
+
+  toast(`活动「${app.title}」已添加到计划 ✓`);
+  __pendingApp = null;
+  __appFormOpen = false;
+  render();
 }
 
 /* ---------- 兴趣书单（基于孩子档案个性化推荐） ---------- */
@@ -1410,6 +1600,8 @@ function clampStudyTasks(tasks){
     min: Math.max(10, Math.min(60, Number(t.min) || 20)),
     beforeDinner: !!t.beforeDinner,
     arrow: !!t.arrow,
+    appType: t.appType || '',
+    appId: t.appId || '',
     onclick: t.onclick || 'toggleTask(this)'
   }));
   // 分时段硬预算：预留眼睛休息间隔，晚饭前窗口 45 分钟、晚饭后窗口 105 分钟
@@ -1970,16 +2162,26 @@ SCRENS.me = ()=>`
 
 /* ---------- 设备端 ---------- */
 const DEV = {};
-DEV.home = ()=>`
+DEV.home = ()=>{
+  const tasks = planTasks();
+  const devTasks = tasks.map(t => {
+    if(t.appType){
+      return `<div class="dev-card" style="cursor:pointer" onclick="devGo('app:${t.appId}')"><div class="icon ${t.icon==='🗣️'?'coral':t.icon==='📖'?'mint':t.icon==='🔢'?'amber':'indigo'}" style="width:42px;height:42px;font-size:20px;border-radius:13px">${t.icon}</div><div style="flex:1"><b style="font-size:14px">${t.name}</b><p style="font-size:11.5px;color:var(--muted);margin:2px 0 0">${t.desc}</p></div></div>`;
+    }
+    const iconCls = t.icon === '📖' ? 'mint' : t.icon === '🔢' ? 'amber' : t.icon === '🗣️' || t.icon === '🎧' ? 'coral' : 'indigo';
+    const goTarget = t.onclick && t.onclick.indexOf('devGo') >= 0 ? t.onclick.match(/devGo\('([^']+)'\)/)?.[1] : null;
+    const clickAttr = goTarget ? `onclick="devGo('${goTarget}')"` : 'style="cursor:pointer" onclick="devGo(\'home\')"';
+    return `<div class="dev-card" ${clickAttr}><div class="icon ${iconCls}" style="width:42px;height:42px;font-size:20px;border-radius:13px">${t.icon}</div><div style="flex:1"><b style="font-size:14px">${t.name}</b><p style="font-size:11.5px;color:var(--muted);margin:2px 0 0">${t.desc}</p></div></div>`;
+  }).join('');
+  return `
 <div class="wrap fade">
-  <div class="dev-hero"><h3>下午好，子涵 👋</h3><p>今天有 3 项学习任务，我们一起完成吧～</p></div>
+  <div class="dev-hero"><h3>下午好，子涵 👋</h3><p>今天有 ${tasks.length} 项学习任务，我们一起完成吧～</p></div>
   <div style="display:flex;justify-content:center;margin-top:18px"><div class="mascot">🤖</div></div>
-  <div class="dev-card"><div class="icon mint">📖</div><div style="flex:1"><b>阅读 · 神奇校车</b><p style="font-size:12px;color:var(--muted)">25 分钟</p></div></div>
-  <div class="dev-card"><div class="icon amber">🔢</div><div style="flex:1"><b>计算 · 口算 20 题</b><p style="font-size:12px;color:var(--muted)">15 分钟</p></div></div>
-  <div class="dev-card"><div class="icon coral">🗣️</div><div style="flex:1"><b>口语陪练 · 先听后说</b><p style="font-size:12px;color:var(--muted)">15 分钟</p></div></div>
-  <div class="dev-card" style="cursor:pointer" onclick="devGo('shop')"><div class="icon amber">⭐</div><div style="flex:1"><b>积分商城</b><p style="font-size:12px;color:var(--muted)">${totalPoints} 积分</p></div></div>
-  <button class="btn" style="margin-top:14px" onclick="devGo('reading')">开始第一项 📖</button>
+  ${devTasks || '<div class="dev-card"><div class="icon mint" style="width:42px;height:42px;font-size:20px;border-radius:13px">📖</div><div style="flex:1"><b style="font-size:14px">阅读 · 神奇校车</b><p style="font-size:11.5px;color:var(--muted);margin:2px 0 0">25 分钟</p></div></div>'}
+  <div class="dev-card" style="cursor:pointer" onclick="devGo('shop')"><div class="icon amber" style="width:42px;height:42px;font-size:20px;border-radius:13px">⭐</div><div style="flex:1"><b style="font-size:14px">积分商城</b><p style="font-size:11.5px;color:var(--muted);margin:2px 0 0">${totalPoints} 积分</p></div></div>
+  <button class="btn" style="margin-top:14px" onclick="devGo('reading')">${tasks.length ? '开始学习 ▶' : '开始阅读 📖'}</button>
 </div>`;
+};
 
 DEV.reading = ()=>`
 <div class="wrap fade">
@@ -2038,7 +2240,195 @@ DEV.shop = ()=>`
   ${REWARDS.map(devRewardCard).join('')}
 </div>`;
 
+/* ---------- 设备端 · 可交互学习活动 ---------- */
+let __appState = null; // { app, difficultyIdx, sentenceIdx, playing, tts }
+
+function getAppById(id){
+  const apps = loadApps();
+  return apps.find(a => a.id === id);
+}
+
+function renderAppScreen(){
+  // deviceScreen format: 'app:appId'
+  const parts = deviceScreen.split(':');
+  if(parts[0] !== 'app') return DEV.home();
+  const appId = parts[1];
+  const app = getAppById(appId);
+  if(!app) return DEV.home();
+
+  if(!__appState || __appState.appId !== appId){
+    __appState = { appId, app, difficultyIdx: -1, sentenceIdx: 0, playing: false, tts: null };
+  }
+
+  const s = __appState;
+  const typeLabel = { oral:'🗣️ 口语练习', reading:'📖 阅读理解', quiz:'❓ 知识问答', other:'🎮 互动活动' }[s.app.type] || '🎮 互动活动';
+
+  // 选择难度阶段
+  if(s.difficultyIdx < 0){
+    const diffs = s.app.difficulties || [];
+    return `
+    <div class="wrap fade">
+      <div class="head"><div class="back" onclick="devGo('home')">‹</div><h2>${s.app.icon || '🎮'} ${s.app.title}</h2><span class="tag coral">${typeLabel}</span></div>
+      <div class="dev-hero"><h3>准备开始</h3><p>选择难度和时长，点击即可开始</p></div>
+      <div class="card" style="margin-top:14px">
+        <div style="font-weight:800;margin-bottom:10px">📊 难度选择</div>
+        <div class="diff-row">
+          ${diffs.map((d, i) => `<button class="diff-chip ${s.difficultyIdx===i?'sel':''}" onclick="appPickDifficulty(${i})">${d.level} · ${(d.desc||'').slice(0,8)}</button>`).join('')}
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div style="font-weight:800;margin-bottom:8px">⏱ 互动时长</div>
+        <div class="dur-selector">
+          ${[5,10,15,20,30].map(m => `<button class="dur-chip ${s.app.duration===m?'sel':''}" onclick="appPickDuration(${m})">${m} 分钟</button>`).join('')}
+        </div>
+      </div>
+      <button class="btn mint" style="margin-top:14px" onclick="appStart()">▶ 开始活动</button>
+      <button class="btn ghost" style="margin-top:10px" onclick="devGo('home')">返回首页</button>
+    </div>`;
+  }
+
+  // 活动进行中
+  const diff = s.app.difficulties[s.difficultyIdx];
+  if(!diff) return DEV.home();
+  const items = diff.items || [];
+  const total = items.length;
+  const cur = items[s.sentenceIdx];
+  const progress = total > 0 ? Math.round((s.sentenceIdx + 1) / total * 100) : 0;
+
+  // 完成
+  if(s.sentenceIdx >= total){
+    return `
+    <div class="wrap fade">
+      <div class="head"><div class="back" onclick="devGo('home')">‹</div><h2>${s.app.icon || '🎮'} ${s.app.title}</h2><span class="tag mint">已完成</span></div>
+      <div class="card" style="text-align:center;padding:30px 20px;margin-top:20px">
+        <div style="font-size:48px">🎉</div>
+        <div style="font-size:18px;font-weight:800;margin-top:12px">活动完成！</div>
+        <p style="font-size:13px;color:var(--muted);margin-top:6px">完成了 ${diff.level} 难度的全部 ${total} 项内容</p>
+      </div>
+      <div class="star-badge"><div class="s">⭐ +20</div><div class="lab">积分已到账</div></div>
+      <button class="btn mint" style="margin-top:14px" onclick="appRestart()">🔄 再做一次</button>
+      <button class="btn ghost" style="margin-top:10px" onclick="devGo('home')">回到首页</button>
+    </div>`;
+  }
+
+  // 显示当前句子
+  const enText = cur.en || cur.q || cur.text || '';
+  const zhText = cur.zh || '';
+
+  return `
+  <div class="wrap fade">
+    <div class="head"><div class="back" onclick="devGo('home')">‹</div><h2>${s.app.icon || '🎮'} ${s.app.title}</h2><span class="tag coral">${diff.level}</span></div>
+    <div class="nav-dots">${Array.from({length: total}, (_, i) => `<span class="${i <= s.sentenceIdx ? 'on' : ''}"></span>`).join('')}</div>
+    <div class="card" style="text-align:center;padding:24px 18px;margin-top:10px">
+      <div style="font-size:12px;color:var(--muted);font-weight:700">第 ${s.sentenceIdx + 1} / ${total} 项</div>
+      ${enText ? `<div style="font-size:20px;font-weight:800;margin:14px 0;line-height:1.5">${enText}</div>` : ''}
+      ${zhText ? `<div style="font-size:14px;color:var(--muted);margin-bottom:14px">${zhText}</div>` : ''}
+      ${cur.options ? `<div style="margin-top:14px">${cur.options.map((o, i) => `<button class="opt" style="margin-bottom:8px" onclick="appAnswer(${i})">${o.en || o.text || o}</button>`).join('')}</div>` : ''}
+    </div>
+    <button class="btn ${s.playing ? 'ghost' : 'mint'}" style="margin-top:14px" onclick="appTogglePlay()">${s.playing ? '⏸ 暂停' : '▶ 播放朗读'}</button>
+    <button class="btn mint" style="margin-top:10px" onclick="appNext()">${s.sentenceIdx + 1 < total ? '下一项 →' : '完成活动 🎉'}</button>
+    <button class="btn ghost" style="margin-top:10px" onclick="devGo('home')">退出</button>
+  </div>`;
+}
+
+function appPickDifficulty(idx){
+  __appState.difficultyIdx = idx;
+  renderDev();
+}
+
+function appPickDuration(min){
+  __appState.app.duration = min;
+  renderDev();
+}
+
+function appStart(){
+  if(__appState.difficultyIdx < 0){
+    toast('请先选择难度');
+    return;
+  }
+  __appState.sentenceIdx = 0;
+  renderDev();
+  // 自动播放第一句
+  setTimeout(() => appTogglePlay(), 300);
+}
+
+function appTogglePlay(){
+  const s = __appState;
+  if(s.sentenceIdx >= (s.app.difficulties[s.difficultyIdx].items || []).length) return;
+
+  if(s.playing){
+    if(s.tts){ try{ s.tts.cancel(); }catch(e){} }
+    s.playing = false;
+    renderDev();
+    return;
+  }
+
+  // 播放当前句子
+  const cur = s.app.difficulties[s.difficultyIdx].items[s.sentenceIdx];
+  const text = cur.en || cur.q || cur.text || '';
+  if(!text) { s.playing = false; renderDev(); return; }
+
+  if('speechSynthesis' in window){
+    try{
+      s.tts = new SpeechSynthesisUtterance(text);
+      s.tts.lang = 'en-US';
+      s.tts.rate = 0.9;
+      s.tts.onend = () => { s.playing = false; renderDev(); };
+      s.tts.onerror = () => { s.playing = false; renderDev(); };
+      speechSynthesis.speak(s.tts);
+      s.playing = true;
+      renderDev();
+    }catch(e){
+      s.playing = false;
+      toast('语音播放不支持，请使用 Chrome 浏览器');
+    }
+  } else {
+    toast('当前浏览器不支持语音合成');
+  }
+}
+
+function appNext(){
+  const s = __appState;
+  if(s.tts){ try{ s.tts.cancel(); }catch(e){} }
+  s.playing = false;
+  s.sentenceIdx++;
+  renderDev();
+}
+
+function appAnswer(idx){
+  const s = __appState;
+  if(s.tts){ try{ s.tts.cancel(); }catch(e){} }
+  s.playing = false;
+  // 简单判断：如果有 correct 标记
+  const cur = s.app.difficulties[s.difficultyIdx].items[s.sentenceIdx];
+  const options = cur.options || [];
+  if(options[idx] && options[idx].correct){
+    toast('✅ 回答正确！+10 积分');
+  } else if(options[idx] && options[idx].correct === false){
+    toast('❌ 再想想～');
+  } else {
+    toast('已记录回答');
+  }
+  s.sentenceIdx++;
+  renderDev();
+}
+
+function appRestart(){
+  const s = __appState;
+  s.sentenceIdx = 0;
+  s.playing = false;
+  if(s.tts){ try{ s.tts.cancel(); }catch(e){} }
+  renderDev();
+}
+
 function renderDev(){
+  // 处理 app:appId 格式的屏幕
+  if(deviceScreen && deviceScreen.indexOf('app:') === 0){
+    devBody.innerHTML = renderAppScreen();
+    devBody.scrollTop = 0;
+    devBody.classList.remove('fade'); void devBody.offsetWidth; devBody.classList.add('fade');
+    return;
+  }
   devBody.innerHTML = DEV[deviceScreen]();
   devBody.scrollTop = 0;
   devBody.classList.remove('fade'); void devBody.offsetWidth; devBody.classList.add('fade');
