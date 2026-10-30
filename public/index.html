@@ -300,6 +300,7 @@ let lastAiReply = '';
 let aiPlan = '';
 let aiTasks = loadPlanState();          // 大模型调整后返回的结构化学习任务（本地持久化）
 let aiApps = [];                         // 伴学页创建的可交互活动（每次进入方向页时加载）
+let aiRemovedDirs = [];                  // 家长明确去掉的学习方向 key（如 oral/read/calc/other/tt）
 let confirmReply = '';       // 确认页最近一次 AI 回复
 let confirmPlanBusy = false; // 确认页调整请求进行中标记
 
@@ -434,10 +435,70 @@ function hasDirectiveNear(text, keywords, directives){
   return false;
 }
 
+/* ---------- 识别家长要去掉的学习方向 ---------- */
+function extractRemovedDirections(text){
+  text = text || '';
+  const removed = [];
+  const groups = [
+    { key:'oral', kw:['口语','口语陪练','英语陪练','英语口语'] },
+    { key:'read', kw:['阅读','读书','绘本阅读'] },
+    { key:'calc', kw:['计算','口算','数学计算','算术'] },
+    { key:'tt',   kw:['数学天天练','天天练','每日练习','数学练习'] },
+    { key:'other', kw:['兴趣','钢琴','围棋','运动','习惯培养'] }
+  ];
+  // 去掉/移除/删除/不要/不需要/取消 等否定表达
+  const negPatterns = [
+    /(?:去掉|移除|删除|删掉|去掉|不要|不需要|取消|不需要|去掉|去掉)\s*(?:方向|任务|内容|安排|计划)?\s*(?:把)?\s*(?:《[^》]+》|[^，,。!?？！\s]{1,15})/g,
+    /(?:把|请把|帮)\s*(?:《[^》]+》|[^，,。!?？！\s]{1,15})\s*(?:去掉|移除|删除|删掉|不要)/g,
+    /(?:《[^》]+》|[^，,。!?？！\s]{1,15})\s*(?:不要|去掉|移除|删除|删掉|不需要)/g,
+    /不要\s*(?:《[^》]+》|[^，,。!?？！\s]{1,15})/g,
+    /不需要\s*(?:《[^》]+》|[^，,。!?？！\s]{1,15})/g
+  ];
+
+  for(const g of groups){
+    for(const pat of negPatterns){
+      let m;
+      while((m = pat.exec(text))){
+        const target = m[0];
+        // 检查 target 是否包含该组的关键词
+        for(const kw of g.kw){
+          if(target.indexOf(kw) >= 0){
+            if(!removed.includes(g.key)) removed.push(g.key);
+            break;
+          }
+        }
+      }
+    }
+    // 也检查整句是否包含否定词和关键词同时出现
+    const negWords = ['去掉','移除','删除','删掉','不要','不需要','取消','去掉'];
+    for(const kw of g.kw){
+      const idx = text.indexOf(kw);
+      while(idx >= 0){
+        const start = Math.max(0, idx - 30);
+        const end = Math.min(text.length, idx + 20);
+        const seg = text.slice(start, end);
+        for(const neg of negWords){
+          if(seg.indexOf(neg) >= 0){
+            if(!removed.includes(g.key)) removed.push(g.key);
+            break;
+          }
+        }
+        idx = text.indexOf(kw, idx + 1);
+      }
+    }
+  }
+  return removed;
+}
+
 /* ---------- 根据 AI 回复动态生成方向卡片 ---------- */
 function genDirCards(text){
   if(!text) return '';
   const dirs = extractDirections(text);
+  // 过滤掉家长明确去掉的方向
+  if(aiRemovedDirs && aiRemovedDirs.length){
+    const removedSet = new Set(aiRemovedDirs);
+    dirs = dirs.filter(d => !removedSet.has(d.key));
+  }
   if(!dirs.length){
     return `<div style="text-align:center;color:var(--muted);padding:24px 16px;font-size:13px;line-height:1.6">还没有识别到学习方向。可以先在「伴学」里继续说明，例如「阅读能力作为单独一个学习方向」。</div>`;
   }
@@ -1099,6 +1160,8 @@ async function gotoDirections(){
   const userPart = pm.filter(m => m.role === 'user').map(m => m.content).join('\n');
   const aiPart = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
   aiPlan = (userPart + '\n' + aiPart).trim();
+  // 检测家长要去掉的方向
+  aiRemovedDirs = extractRemovedDirections(userPart);
   // 加载已创建的活动
   aiApps = loadApps();
   push('directions');
@@ -1480,6 +1543,16 @@ async function adjustPlan(input){
       savePlanState(aiTasks);
     }
     let replyText = (data.reply || '已按你的要求调整好计划，请确认。').trim();
+    // 截断过长的回复，只保留第一句话
+    if(replyText.length > 80){
+      // 尝试找到第一个句号/感叹号/问号后的截断点
+      const cutMatch = replyText.match(/^([^。！？!?]{1,80}[。！？!?]?)/);
+      if(cutMatch){
+        replyText = cutMatch[0];
+      } else {
+        replyText = replyText.substring(0, 80) + '…';
+      }
+    }
     if(replyText.includes('？') || replyText.includes('?')){
       replyText = '已按你的要求调整好计划，请确认。';
     }
@@ -1671,6 +1744,11 @@ function planTasks(){
     const bookMatch = text.match(/《([^》]+)》/);
     const book = bookMatch ? '《' + bookMatch[1].trim() + '》' : defaultBook();
     const dirs = extractDirections(text);
+    // 过滤掉家长明确去掉的方向
+    if(aiRemovedDirs && aiRemovedDirs.length){
+      const removedSet = new Set(aiRemovedDirs);
+      dirs = dirs.filter(d => !removedSet.has(d.key));
+    }
     raw = dirs.map(d => {
       let name = d.title;
       let desc = `${fmtMin(d.min)} · ${d.desc}`;
