@@ -384,7 +384,8 @@ app.post('/api/reward/add', async (req, res) => {
     prompt = `a cute cartoon sticker of ${name}, child-friendly, colorful, simple background, high quality`;
   }
 
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&nologo=true`;
+  const encodedPrompt = encodeURIComponent(prompt).replace(/'/g, '%27').replace(/"/g, '%22');
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&nologo=true`;
 
   return res.json({
     id: 'rw' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
