@@ -362,6 +362,38 @@ app.post('/api/plan/adjust', async (req, res) => {
   }
 });
 
+/* 积分商城 · 新增兑换商品：AI 生成匹配图片（Pollinations.ai 免费文生图） */
+app.post('/api/reward/add', async (req, res) => {
+  const name = (req.body?.name || '').trim();
+  const cost = Number(req.body?.cost || 0);
+  if (!name) return res.status(400).json({ error: '请填写商品名称' });
+
+  let prompt;
+  if (SPARK_ENABLED) {
+    try {
+      prompt = await callSpark(
+        [{ role: 'user', content: `请为以下儿童积分商城商品写一个英文AI画图提示词，用于生成可爱的卡通风格商品图。只输出英文提示词本身，不要其他内容。商品：${name}` }],
+        { systemPrompt: '你是图片生成提示词助手。根据中文商品名称，输出一个适合AI画图的英文提示词，描述一个可爱的卡通风格儿童积分商城商品图片，简洁背景。只输出英文提示词，不要任何其他内容。' }
+      );
+      prompt = (prompt || '').trim();
+    } catch {
+      prompt = '';
+    }
+  }
+  if (!prompt) {
+    prompt = `a cute cartoon sticker of ${name}, child-friendly, colorful, simple background, high quality`;
+  }
+
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&nologo=true`;
+
+  return res.json({
+    id: 'rw' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    name,
+    cost,
+    image: imageUrl
+  });
+});
+
 /* ---------------- 启动 ---------------- */
 
 app.listen(PORT, () => {
