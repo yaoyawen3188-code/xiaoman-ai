@@ -299,6 +299,7 @@ let checkQStreaming = false;
 let lastAiReply = '';
 let aiPlan = '';
 let aiTasks = loadPlanState();          // 大模型调整后返回的结构化学习任务（本地持久化）
+let aiApps = [];                         // 伴学页创建的可交互活动（每次进入方向页时加载）
 let confirmReply = '';       // 确认页最近一次 AI 回复
 let confirmPlanBusy = false; // 确认页调整请求进行中标记
 
@@ -452,6 +453,28 @@ function genDirCards(text){
         <p>${d.desc}</p>
         <div class="meta"><span class="tag indigo">${ctxTag[d.key]}</span></div>
         ${readBtn}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- 渲染已创建的互动活动卡片 ---------- */
+function genAppCards(){
+  if(!aiApps || !aiApps.length) return '';
+  return aiApps.map(app => {
+    const typeLabel = { oral:'🗣️ 口语练习', reading:'📖 阅读理解', quiz:'❓ 知识问答', other:'🎮 互动活动' }[app.type] || '🎮 互动活动';
+    const diffCount = (app.difficulties || []).length;
+    return `<div class="dir-card">
+      <div class="icon indigo" style="width:42px;height:42px;font-size:22px">${app.icon || '🎮'}</div>
+      <div class="body">
+        <h4>${app.title}</h4>
+        <p>${app.content || ''}</p>
+        <div class="meta">
+          <span class="tag indigo">${typeLabel}</span>
+          <span class="tag amber">${diffCount} 级难度</span>
+          <span class="tag mint">${app.duration || 15} 分钟</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px">已在计划中 · 设备端可运行</div>
       </div>
     </div>`;
   }).join('');
@@ -1076,6 +1099,8 @@ async function gotoDirections(){
   const userPart = pm.filter(m => m.role === 'user').map(m => m.content).join('\n');
   const aiPart = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
   aiPlan = (userPart + '\n' + aiPart).trim();
+  // 加载已创建的活动
+  aiApps = loadApps();
   push('directions');
 }
 
@@ -1364,6 +1389,7 @@ SCRENS.directions = ()=>`
       </div>
     </div>
   `}
+  ${genAppCards()}
   <button class="btn" onclick="push('confirm')">进入计划确认</button>
 </div>`;
 
@@ -1627,8 +1653,10 @@ function planTasks(){
       desc: t.desc || `${fmtMin(t.min || 20)}`,
       min: Math.max(1, Math.min(180, Number(t.min) || 20)),
       beforeDinner: !!t.beforeDinner,
-      arrow: false,
-      onclick: 'toggleTask(this)'
+      arrow: !!t.arrow,
+      appType: t.appType || '',
+      appId: t.appId || '',
+      onclick: t.onclick || 'toggleTask(this)'
     }));
   } else if(!aiPlan){
     const book = defaultBook();
@@ -1668,6 +1696,25 @@ function planTasks(){
       }
       return { name, icon:d.icon, desc, min:d.min, beforeDinner:d.beforeDinner, arrow, onclick };
     });
+    // 追加已创建的活动任务（不重复）
+    if(aiTasks && aiTasks.length){
+      const existingNames = new Set(raw.map(r => r.name));
+      for(const t of aiTasks){
+        if(t.appType && !existingNames.has(t.name)){
+          raw.push({
+            name: t.name,
+            icon: t.icon,
+            desc: t.desc,
+            min: Math.max(1, Math.min(180, Number(t.min) || 20)),
+            beforeDinner: !!t.beforeDinner,
+            arrow: true,
+            appType: t.appType,
+            appId: t.appId,
+            onclick: t.onclick || `devGo('app:${t.appId}')`
+          });
+        }
+      }
+    }
   }
   return clampStudyTasks(raw);
 }
