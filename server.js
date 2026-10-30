@@ -516,6 +516,60 @@ function repairJson(raw) {
   }
 }
 
+/* 伴学 · AI 为已创建活动生成简短命名和简介 */
+app.post('/api/app/describe', async (req, res) => {
+  const spec = req.body?.spec || {};
+  if (!spec.title && !spec.content) {
+    return res.status(400).json({ error: '缺少活动信息' });
+  }
+
+  if (!SPARK_ENABLED) {
+    const title = (spec.title || '学习活动').substring(0, 10);
+    const desc = (spec.content || '').substring(0, 30);
+    return res.json({ shortName: title, shortDesc: desc });
+  }
+
+  const DESCRIBE_SYSTEM_PROMPT = [
+    '你是「小满伴学」的 AI 活动命名助手。根据活动规格，生成一个简短的活动名称和一句话简介。',
+    '',
+    '要求：',
+    '- shortName：不超过 10 个字，简洁有力，适合在列表中显示',
+    '- shortDesc：不超过 30 个字，概括活动内容和亮点',
+    '- 不要输出任何其他内容，只输出 JSON',
+    '',
+    '输出格式：{"shortName":"名称","shortDesc":"简介"}'
+  ].join('\n');
+
+  const userPrompt = `活动标题：${spec.title || ''}\n活动内容：${spec.content || ''}\n活动类型：${spec.type || 'oral'}\n难度级数：${(spec.difficulties || []).length}`;
+
+  try {
+    const reply = await callSpark(
+      [{ role: 'user', content: userPrompt }],
+      { systemPrompt: DESCRIBE_SYSTEM_PROMPT }
+    );
+
+    const jsonMatch = reply.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      let parsed = JSON.parse(jsonMatch[0]);
+      if (!parsed.shortName) parsed.shortName = (spec.title || '学习活动').substring(0, 10);
+      if (!parsed.shortDesc) parsed.shortDesc = (spec.content || '').substring(0, 30);
+      // 截断确保不超长
+      parsed.shortName = String(parsed.shortName).substring(0, 15);
+      parsed.shortDesc = String(parsed.shortDesc).substring(0, 50);
+      return res.json(parsed);
+    }
+    // fallback
+    return res.json({
+      shortName: (spec.title || '学习活动').substring(0, 10),
+      shortDesc: (spec.content || '').substring(0, 30)
+    });
+  } catch (err) {
+    return res.status(502).json({
+      error: '命名失败：' + (err && err.message ? err.message : '未知错误')
+    });
+  }
+});
+
 /* ---------------- 启动 ---------------- */
 
 app.listen(PORT, () => {
