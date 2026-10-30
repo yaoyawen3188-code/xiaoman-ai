@@ -395,6 +395,79 @@ app.post('/api/reward/add', async (req, res) => {
   });
 });
 
+/* 伴学 · AI 创建可交互学习活动应用 */
+app.post('/api/app/create', async (req, res) => {
+  const instructions = (req.body?.instructions || '').trim();
+  if (!instructions) {
+    return res.status(400).json({ error: '请输入活动指令' });
+  }
+
+  if (!SPARK_ENABLED) {
+    return res.json({
+      type: 'oral',
+      title: '口语练习 · 示例活动',
+      content: instructions,
+      difficulties: [
+        { level: '低', desc: '课文内容', items: [{ en: 'Hello! What\'s your name?', zh: '你好！你叫什么名字？' }] },
+        { level: '中', desc: '场景衍生', items: [{ en: 'Nice to meet you!', zh: '很高兴认识你！' }] },
+        { level: '高', desc: '拓展内容', items: [{ en: 'Where are you from?', zh: '你来自哪里？' }] }
+      ],
+      duration: 15,
+      icon: '🗣️'
+    });
+  }
+
+  const APP_SYSTEM_PROMPT = [
+    '你是「小满伴学」的 AI 活动创建助手。根据家长的描述，创建一个可交互的学习活动应用规格，用于在设备端运行。',
+    '',
+    '活动类型（type）可选：',
+    '- oral：口语练习（英语跟读/对话，含英文句子和中文翻译）',
+    '- reading：阅读理解（含阅读材料和问题）',
+    '- quiz：知识问答（含问题和选项）',
+    '- other：其他互动活动',
+    '',
+    '难度（difficulties）规则：',
+    '- 默认三个难度：低、中、高',
+    '- 低：完全以课文/基础内容为主',
+    '- 中：适当增加场景衍生，联系前后内容',
+    '- 高：增加教材外的拓展内容',
+    '- 每个难度下要有 3-5 条具体内容（items），oral 类型每条包含 en（英文）和 zh（中文翻译）',
+    '',
+    '输出 JSON 格式（只输出 JSON，不要其他内容）：',
+    '{"type":"oral","title":"活动标题","content":"内容描述","difficulties":[{"level":"低","desc":"说明","items":[{"en":"英文句子","zh":"中文翻译"}]},{"level":"中","desc":"说明","items":[]},{"level":"高","desc":"说明","items":[]}],"duration":15,"icon":"🗣️"}',
+    '',
+    '要求：',
+    '- 内容要真实、适合对应年级的教材内容',
+    '- 英文句子要地道、口语化',
+    '- 如果家长没有指定教材，按小学中年级水平生成'
+  ].join('\n');
+
+  try {
+    const reply = await callSpark(
+      [{ role: 'user', content: instructions }],
+      { systemPrompt: APP_SYSTEM_PROMPT }
+    );
+
+    const jsonMatch = reply.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const spec = JSON.parse(jsonMatch[0]);
+      // 规范化
+      if (!spec.type) spec.type = 'oral';
+      if (!spec.title) spec.title = '学习活动';
+      if (!spec.content) spec.content = instructions;
+      if (!Array.isArray(spec.difficulties)) spec.difficulties = [];
+      if (!spec.duration) spec.duration = 15;
+      if (!spec.icon) spec.icon = '🎮';
+      return res.json(spec);
+    }
+    return res.status(500).json({ error: 'AI 未能生成有效规格，请换一种描述方式' });
+  } catch (err) {
+    return res.status(502).json({
+      error: '活动创建失败：' + (err && err.message ? err.message : '未知错误')
+    });
+  }
+});
+
 /* ---------------- 启动 ---------------- */
 
 app.listen(PORT, () => {
