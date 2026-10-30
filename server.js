@@ -450,7 +450,17 @@ app.post('/api/app/create', async (req, res) => {
 
     const jsonMatch = reply.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const spec = JSON.parse(jsonMatch[0]);
+      const raw = jsonMatch[0];
+      let spec;
+      try {
+        spec = JSON.parse(raw);
+      } catch (parseErr) {
+        // AI 返回的 JSON 可能有格式问题，尝试修复
+        spec = repairJson(raw);
+        if (!spec) {
+          return res.status(500).json({ error: 'AI 返回的 JSON 格式有误，请换一种描述方式重试' });
+        }
+      }
       // 规范化
       if (!spec.type) spec.type = 'oral';
       if (!spec.title) spec.title = '学习活动';
@@ -467,6 +477,42 @@ app.post('/api/app/create', async (req, res) => {
     });
   }
 });
+
+/* 修复 LLM 返回的不规范 JSON */
+function repairJson(raw) {
+  if (!raw) return null;
+  try {
+    // 1. 单引号 → 双引号（但要小心字符串内的引号）
+    let s = raw;
+    // 2. 属性名不加引号：{type:'oral'} → {"type":"oral"}
+    //    匹配 { 或 , 后面跟字母/下划线，再跟 :
+    s = s.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+    // 3. 字符串值用单引号：'oral' → "oral"
+    //    只处理属性值位置的单引号
+    s = s.replace(/:\s*'([^']*)'/g, ': "$1"');
+    // 4. 去掉末尾多余的逗号
+    s = s.replace(/,\s*}/g, '}');
+    s = s.replace(/,\s*]/g, ']');
+    // 5. 处理嵌套对象里的属性名（递归修复）
+    //    先尝试解析，如果失败再尝试更激进的修复
+    return JSON.parse(s);
+  } catch (e) {
+    // 尝试更激进的修复：把所有单引号字符串替换为双引号
+    try {
+      let s = raw;
+      // 更宽松的属性名匹配
+      s = s.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+      // 更宽松的字符串值匹配
+      s = s.replace(/:\s*'([^']*)'/g, ': "$1"');
+      s = s.replace(/:\s*`([^`]*)`/g, ': "$1"');
+      s = s.replace(/,\s*}/g, '}');
+      s = s.replace(/,\s*]/g, ']');
+      return JSON.parse(s);
+    } catch (e2) {
+      return null;
+    }
+  }
+}
 
 /* ---------------- 启动 ---------------- */
 
