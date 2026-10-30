@@ -1013,7 +1013,7 @@ function renderPreview(){
     </div>`;
 }
 
-function confirmApp(){
+async function confirmApp(){
   if(!__pendingApp) return;
   const app = __pendingApp;
   const apps = loadApps();
@@ -1021,22 +1021,45 @@ function confirmApp(){
   apps.push(newApp);
   saveApps(apps);
 
-  // 添加到计划任务
+  // 调用 AI 生成简短命名和简介
+  try {
+    const descRes = await fetch('/api/app/describe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spec: newApp })
+    });
+    const descData = await descRes.json().catch(() => ({}));
+    if(descData.shortName || descData.shortDesc){
+      newApp.shortName = descData.shortName || newApp.title || '学习活动';
+      newApp.shortDesc = descData.shortDesc || (newApp.content || '').substring(0, 30);
+    } else {
+      newApp.shortName = (newApp.title || '学习活动').substring(0, 10);
+      newApp.shortDesc = (newApp.content || '').substring(0, 30);
+    }
+    // 更新 localStorage
+    saveApps(apps);
+  } catch(e) {
+    newApp.shortName = (newApp.title || '学习活动').substring(0, 10);
+    newApp.shortDesc = (newApp.content || '').substring(0, 30);
+    saveApps(apps);
+  }
+
+  // 添加到计划任务（使用短名称）
   aiTasks = aiTasks || [];
   aiTasks.push({
-    name: app.title || '学习活动',
-    icon: app.icon || '🎮',
-    desc: `${app.duration || 15} 分钟 · 互动活动`,
-    min: Math.max(10, Math.min(60, app.duration || 15)),
+    name: newApp.shortName || newApp.title || '学习活动',
+    icon: newApp.icon || '🎮',
+    desc: `${newApp.duration || 15} 分钟 · ${newApp.shortDesc || '互动活动'}`,
+    min: Math.max(10, Math.min(60, newApp.duration || 15)),
     beforeDinner: false,
-    appType: app.type,
+    appType: newApp.type,
     appId: newApp.id,
     arrow: true,
     onclick: `devGo('app:${newApp.id}')`
   });
   savePlanState(aiTasks);
 
-  toast(`活动「${app.title}」已添加到计划 ✓`);
+  toast(`活动「${newApp.shortName}」已添加到计划 ✓`);
   __pendingApp = null;
   __appFormOpen = false;
   render();
@@ -2254,7 +2277,21 @@ SCRENS.points = ()=>`
   <button class="btn mint" style="margin-top:10px" onclick="devGo('shop')">在设备端兑换奖励</button>
 </div>`;
 
-SCRENS.me = ()=>`
+SCRENS.me = ()=>{
+  const apps = loadApps();
+  const appListHtml = apps.length ? apps.map(a => `
+    <div class="app-task-card">
+      <div class="at-icon">${a.icon || '🎮'}</div>
+      <div style="flex:1;min-width:0">
+        <b style="font-size:14px">${a.shortName || a.title || '学习活动'}</b>
+        <p style="font-size:11.5px;color:var(--muted);margin:2px 0 0">${a.shortDesc || (a.content || '').substring(0, 30) || ''} · ${a.duration || 15} 分钟</p>
+      </div>
+      <button class="btn sm ghost" style="width:auto;padding:6px 10px;font-size:11px;flex:none" onclick="toggleAppEdit('${a.id}')">编辑</button>
+      <button class="btn sm ${'danger'}" style="width:auto;padding:6px 10px;font-size:11px;flex:none;background:#FFE8E4;color:#E2574C;border:1px solid #FFD0C8" onclick="deleteApp('${a.id}')">删除</button>
+    </div>
+    <div id="appEdit_${a.id}"></div>
+  `).join('') : '<div style="text-align:center;color:var(--muted);padding:16px;font-size:12.5px">还没有创建活动，去「伴学」页面试试 🎮</div>';
+  return `
 <div class="wrap fade">
   <div class="head"><div class="back" onclick="goBack()">‹</div><h2>我的</h2><span></span></div>
   <div class="device-found">
@@ -2282,8 +2319,108 @@ SCRENS.me = ()=>`
     <div style="flex:1"><b style="font-size:15px">积分与奖励</b><p style="font-size:12px;color:var(--muted);margin:2px 0 0">本学期积分 · 兑换明细</p></div>
     <div style="color:var(--muted);font-size:18px">›</div>
   </div>
+  <div class="card" style="margin-top:12px">
+    <div style="font-weight:800;margin-bottom:10px">🎮 我的活动 (${apps.length})</div>
+    ${appListHtml}
+  </div>
   <div style="height:20px"></div>
 </div>`;
+};
+
+/* ---------- 活动编辑/删除 ---------- */
+let __editingAppId = null;
+
+function toggleAppEdit(appId){
+  const area = document.getElementById('appEdit_' + appId);
+  if(!area) return;
+  if(area.innerHTML){
+    area.innerHTML = '';
+    __editingAppId = null;
+    return;
+  }
+  __editingAppId = appId;
+  const apps = loadApps();
+  const app = apps.find(a => a.id === appId);
+  if(!app) return;
+  area.innerHTML = `
+    <div class="card" style="margin-top:8px;background:#FFF8EE;border-color:#F2E2C6">
+      <div style="font-weight:800;font-size:13px;color:#B26A1E;margin-bottom:8px">编辑活动</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input id="editAppName" class="textbox" placeholder="活动名称" value="${(app.shortName || app.title || '').replace(/"/g, '&quot;')}" style="width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px;font-size:13px;font-family:inherit;outline:none">
+        <input id="editAppDesc" class="textbox" placeholder="一句话简介" value="${(app.shortDesc || (app.content||'').substring(0,30) || '').replace(/"/g, '&quot;')}" style="width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px;font-size:13px;font-family:inherit;outline:none">
+        <input id="editAppDur" type="number" placeholder="时长（分钟）" value="${app.duration || 15}" style="width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px;font-size:13px;font-family:inherit;outline:none">
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn sm mint" style="width:auto;padding:8px 14px;font-size:12px" onclick="saveAppEdit('${appId}')">保存</button>
+          <button class="btn sm ghost" style="width:auto;padding:8px 14px;font-size:12px" onclick="toggleAppEdit('${appId}')">取消</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function saveAppEdit(appId){
+  const name = (document.getElementById('editAppName')?.value || '').trim();
+  const desc = (document.getElementById('editAppDesc')?.value || '').trim();
+  const dur = Number(document.getElementById('editAppDur')?.value || '15') || 15;
+  if(!name){ toast('请填写活动名称'); return; }
+
+  const apps = loadApps();
+  const app = apps.find(a => a.id === appId);
+  if(!app) return;
+  app.shortName = name.substring(0, 15);
+  app.shortDesc = desc.substring(0, 50);
+  app.duration = Math.max(5, Math.min(60, dur));
+  saveApps(apps);
+
+  // 同步更新 aiTasks
+  if(aiTasks){
+    const task = aiTasks.find(t => t.appId === appId);
+    if(task){
+      task.name = app.shortName;
+      task.desc = `${app.duration} 分钟 · ${app.shortDesc}`;
+      task.min = app.duration;
+      savePlanState(aiTasks);
+    }
+  }
+  // 同步更新 aiApps（如果已加载）
+  if(aiApps){
+    const a = aiApps.find(x => x.id === appId);
+    if(a){
+      a.shortName = app.shortName;
+      a.shortDesc = app.shortDesc;
+      a.duration = app.duration;
+    }
+  }
+
+  toast(`活动「${app.shortName}」已更新 ✓`);
+  toggleAppEdit(appId);
+  render();
+}
+
+function deleteApp(appId){
+  const apps = loadApps();
+  const app = apps.find(a => a.id === appId);
+  if(!app) return;
+  const confirmMsg = `确定要删除活动「${app.shortName || app.title}」吗？\n\n删除后将从学习计划和设备端移除。`;
+  if(!confirm(confirmMsg)) return;
+
+  // 从 localStorage 删除
+  const newApps = apps.filter(a => a.id !== appId);
+  saveApps(newApps);
+
+  // 从 aiTasks 删除
+  if(aiTasks){
+    aiTasks = aiTasks.filter(t => t.appId !== appId);
+    savePlanState(aiTasks);
+  }
+
+  // 从 aiApps 删除
+  if(aiApps){
+    aiApps = aiApps.filter(a => a.id !== appId);
+  }
+
+  toast(`活动「${app.shortName || app.title}」已删除`);
+  render();
+}
 
 /* ---------- 设备端 ---------- */
 const DEV = {};
