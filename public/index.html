@@ -1801,23 +1801,43 @@ SCRENS.check = ()=>`
   <button class="btn" style="margin-top:12px" onclick="goto('points')">查看今日积分 →</button>
 </div>`;
 
-const REWARDS = [
-  {id:'r1', icon:'⭐', name:'解锁奥特曼语音包', cost:1200, desc:'设备端全部语音换奥特曼音色'},
-  {id:'r2', icon:'🎁', name:'兑换「汪汪队」贴纸', cost:300, desc:'实物贴纸包'},
-  {id:'r3', icon:'🕹️', name:'解锁 10 分钟休闲时长', cost:500, desc:'本周增加 10 分钟自由时间'},
-  {id:'r4', icon:'🎯', name:'兑换「神奇校车」徽章', cost:200, desc:'阅读成就徽章'}
+const DEFAULT_REWARDS = [
+  {id:'r1', icon:'⭐', name:'解锁奥特曼语音包', cost:1200, desc:'设备端全部语音换奥特曼音色', image:null},
+  {id:'r2', icon:'🎁', name:'兑换「汪汪队」贴纸', cost:300, desc:'实物贴纸包', image:null},
+  {id:'r3', icon:'🕹️', name:'解锁 10 分钟休闲时长', cost:500, desc:'本周增加 10 分钟自由时间', image:null},
+  {id:'r4', icon:'🎯', name:'兑换「神奇校车」徽章', cost:200, desc:'阅读成就徽章', image:null}
 ];
+function loadRewards(){
+  try{
+    const raw = localStorage.getItem('xm_rewards');
+    if(!raw) return DEFAULT_REWARDS.map(r => ({...r}));
+    const arr = JSON.parse(raw);
+    if(!Array.isArray(arr) || !arr.length) return DEFAULT_REWARDS.map(r => ({...r}));
+    // 补全默认奖励中尚未存在的项
+    const ids = new Set(arr.map(r => r.id));
+    for(const d of DEFAULT_REWARDS){ if(!ids.has(d.id)) arr.push({...d}); }
+    return arr;
+  }catch(e){ return DEFAULT_REWARDS.map(r => ({...r})); }
+}
+function saveRewards(){
+  try{ localStorage.setItem('xm_rewards', JSON.stringify(REWARDS)); }catch(e){}
+}
+let REWARDS = loadRewards();
+function rewardIconHtml(r){
+  if(r.image) return `<img src="${r.image}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;background:var(--bg)" alt="${r.name}">`;
+  return `<div class="icon amber">${r.icon||'🎁'}</div>`;
+}
 function rewardCard(r){
   const status = totalPoints >= r.cost
     ? '<span class="tag amber">可兑换</span>'
     : `<span class="tag indigo">还差 ${(r.cost - totalPoints).toLocaleString()}</span>`;
-  return `<div class="reward"><div class="icon amber">${r.icon}</div><div style="flex:1"><b>${r.name}</b><p style="font-size:12px;color:var(--muted)">${r.cost} 积分 · ${r.desc}</p></div>${status}</div>`;
+  return `<div class="reward">${rewardIconHtml(r)}<div style="flex:1"><b>${r.name}</b><p style="font-size:12px;color:var(--muted)">${r.cost} 积分 · ${r.desc||''}</p></div>${status}</div>`;
 }
 function devRewardCard(r){
   const status = totalPoints >= r.cost
     ? `<button class="btn sm mint" style="width:auto;padding:6px 12px;font-size:11.5px" onclick="redeemReward('${r.id}')">兑换</button>`
     : `<span class="tag indigo">还差 ${(r.cost - totalPoints).toLocaleString()}</span>`;
-  return `<div class="dev-card"><div class="icon amber">${r.icon}</div><div style="flex:1"><b style="font-size:13.5px">${r.name}</b><p style="font-size:11.5px;color:var(--muted);margin:2px 0 0">${r.cost} 积分</p></div>${status}</div>`;
+  return `<div class="dev-card">${rewardIconHtml(r)}<div style="flex:1"><b style="font-size:13.5px">${r.name}</b><p style="font-size:11.5px;color:var(--muted);margin:2px 0 0">${r.cost} 积分</p></div>${status}</div>`;
 }
 function redeemReward(id){
   const r = REWARDS.find(x=>x.id===id);
@@ -1826,6 +1846,78 @@ function redeemReward(id){
   totalPoints -= r.cost;
   toast(`已兑换：${r.name} 🎉`);
   render(); renderDev();
+}
+
+/* ---------- 积分商城 · 新增兑换商品 ---------- */
+function toggleRewardForm(){
+  const f = document.getElementById('rewardForm');
+  if(!f) return;
+  if(f.innerHTML){ f.innerHTML = ''; return; }
+  f.innerHTML = `
+    <div class="card" style="margin-top:12px">
+      <div style="font-weight:800;margin-bottom:10px">新增兑换商品 🛒</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="rewardName" class="textbox" placeholder="商品名称，如：汪汪队贴纸" style="flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;font-size:14px;font-family:inherit;outline:none">
+          <button class="mic" id="rewardMic" style="width:42px;height:42px;flex-shrink:0" onclick="toggleRewardMic(this)"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
+        </div>
+        <input id="rewardCost" type="number" placeholder="兑换所需积分数量，如：300" value="300" style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;font-size:14px;font-family:inherit;outline:none">
+        <div style="display:flex;gap:8px;margin-top:2px">
+          <button class="btn mint" style="width:auto;padding:9px 16px;font-size:13px" onclick="addReward()">✨ AI 生成图片并添加</button>
+          <button class="btn ghost" style="width:auto;padding:9px 16px;font-size:13px" onclick="toggleRewardForm()">取消</button>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin:2px 0 0">AI 会根据商品名称自动生成匹配的卡通商品图</p>
+      </div>
+    </div>`;
+  setTimeout(()=>{
+    const inp = document.getElementById('rewardName');
+    if(inp) inp.focus();
+  }, 0);
+}
+
+function toggleRewardMic(el){
+  const bar = el.closest('.inputbar') || el.parentElement;
+  const input = bar ? bar.querySelector('#rewardName') : null;
+  startVoice(el, { input });
+}
+
+async function addReward(){
+  const name = (document.getElementById('rewardName')?.value || '').trim();
+  const cost = Number(document.getElementById('rewardCost')?.value || '0') || 0;
+  if(!name){ toast('请填写商品名称'); return; }
+  if(cost <= 0){ toast('请填写有效的积分数量'); return; }
+
+  const btn = event?.target;
+  if(btn){ btn.textContent = 'AI 正在生成图片…'; btn.disabled = true; }
+
+  try {
+    const res = await fetch('/api/reward/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, cost })
+    });
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok){
+      throw new Error(data.error || 'HTTP ' + res.status);
+    }
+    REWARDS.push({
+      id: data.id || 'rw' + Date.now().toString(36),
+      icon: '🛒',
+      name: data.name || name,
+      cost: data.cost || cost,
+      desc: '家长自定义兑换商品',
+      image: data.image || null
+    });
+    saveRewards();
+    toast(`已添加商品：${name} 🎉`);
+    toggleRewardForm();
+    render();
+    renderDev();
+  } catch(err) {
+    toast('添加失败：' + (err.message || '请稍后重试'));
+  } finally {
+    if(btn){ btn.textContent = '✨ AI 生成图片并添加'; btn.disabled = false; }
+  }
 }
 SCRENS.points = ()=>`
 <div class="wrap fade">
@@ -1839,6 +1931,8 @@ SCRENS.points = ()=>`
   </div>
   <div style="font-weight:800;margin:6px 0 10px">🎁 积分兑换奖励明细</div>
   ${REWARDS.map(rewardCard).join('')}
+  <button class="btn mint" style="margin-top:12px" onclick="toggleRewardForm()">＋ 新增商品</button>
+  <div id="rewardForm"></div>
   <button class="btn ghost" style="margin-top:12px" onclick="goto('home')">回到今日计划</button>
   <button class="btn mint" style="margin-top:10px" onclick="devGo('shop')">在设备端兑换奖励</button>
 </div>`;
