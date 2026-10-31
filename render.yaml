@@ -1,11 +1,17 @@
 services:
   - type: web
     name: xiaoman-ai
+    runtime: node
     plan: free
     buildCommand: npm install
-    startCommand: npm start
+    startCommand: node server.js
     healthCheckPath: /api/health
     envVars:
       - key: SPARK_API_KEY
         sync: false
         required: true
+      - key: SPARK_MODEL
+        value: spark-x2.6-4b
+      - key: SPARK_API_BASE
+        value: https://maas-api.cn-huabei-1.xf-yun.com/v1
+    autoDeploy: true
