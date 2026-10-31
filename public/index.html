@@ -1,4 +1,4 @@
-﻿﻿<!DOCTYPE html>
+﻿﻿﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -717,7 +717,7 @@ async function sendText(input){
     scrollChat();
   } finally {
     streaming = false;
-    if(bookChanged){
+    if(bookChanged && stack[stack.length-1]==='profile'){
       render();
     } else {
       scrollChat();
@@ -1201,26 +1201,19 @@ function refreshBooks(){
 
 /* ---------- 大模型结果驱动下游页面 ---------- */
 async function gotoDirections(){
-  // 先发送输入框里还没发出去的文字，等 AI 回复完再跳转
   const ti = document.querySelector('#screenBody .textbox');
+  // 有未发送的文字时先发给 AI（后台执行，不阻塞跳转）
   if(ti && ti.value.trim() && !streaming){
-    const btn = document.getElementById('nextBtn');
-    if(btn){ btn.textContent = 'AI 正在生成…'; btn.disabled = true; }
-    try {
-      await sendText(ti);
-    } catch(e) {
-      // AI 请求异常时仍继续跳转，避免卡在伴学页
-    }
-    if(btn){ btn.textContent = '下一步 →'; btn.disabled = false; }
+    sendText(ti).catch(()=>{});
   }
-  // 把整个伴学对话（家长要求 + AI 回复）作为学习方向依据
+  // 等待 sendText 同步部分（保存用户消息）完成
+  await new Promise(r=>setTimeout(r, 50));
+  // 从伴学历史中提取学习方向
   const pm = loadProfileChat();
   const userPart = pm.filter(m => m.role === 'user').map(m => m.content).join('\n');
   const aiPart = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
   aiPlan = (userPart + '\n' + aiPart).trim();
-  // 检测家长要去掉的方向
   aiRemovedDirs = extractRemovedDirections(userPart);
-  // 加载已创建的活动
   aiApps = loadApps();
   push('directions');
 }
@@ -2884,4 +2877,5 @@ renderDev();
 </script>
 </body>
 </html>
+
 
