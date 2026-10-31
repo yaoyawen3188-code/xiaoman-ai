@@ -570,6 +570,63 @@ app.post('/api/app/describe', async (req, res) => {
   }
 });
 
+/* 伴学 · AI 根据家长指令调整活动内容 */
+app.post('/api/app/update', async (req, res) => {
+  const app = req.body?.app || {};
+  const instruction = (req.body?.instruction || '').trim();
+  if (!app.title && !app.content) {
+    return res.status(400).json({ error: '缺少活动信息' });
+  }
+  if (!instruction) {
+    return res.status(400).json({ error: '请提供调整指令' });
+  }
+
+  if (!SPARK_ENABLED) {
+    return res.json(app);
+  }
+
+  const APP_UPDATE_SYSTEM_PROMPT = [
+    '你是「小满伴学」的 AI 活动编辑助手。根据家长的调整指令，更新一个可交互学习活动。',
+    '',
+    '当前活动信息：',
+    `标题：${app.title || ''}`,
+    `内容：${app.content || ''}`,
+    `类型：${app.type || 'oral'}`,
+    `难度：${(app.difficulties || []).map(d => d.level).join('、') || '无'}`,
+    `时长：${app.duration || 15} 分钟`,
+    '',
+    '家长的调整指令：' + instruction,
+    '',
+    '要求：',
+    '- 返回更新后的完整活动 JSON，包含 title, content, type, difficulties, duration, icon 字段',
+    '- difficulties 数组中每个元素包含 level, desc, items 三个字段',
+    '- icon 保持原值或选择合适 emoji',
+    '- 只输出 JSON，不要输出任何其他内容',
+    '',
+    '输出格式：{"title":"...","content":"...","type":"oral","difficulties":[{"level":"低","desc":"...","items":["..."]}],"duration":15,"icon":"🎮"}'
+  ].join('\n');
+
+  try {
+    const reply = await callSpark(
+      [{ role: 'user', content: instruction }],
+      { systemPrompt: APP_UPDATE_SYSTEM_PROMPT }
+    );
+
+    const jsonMatch = reply.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      let updated = JSON.parse(jsonMatch[0]);
+      // 合并原字段，保留 id、shortName、shortDesc 等
+      Object.assign(app, updated);
+      return res.json(app);
+    }
+    return res.json(app);
+  } catch (err) {
+    return res.status(502).json({
+      error: '更新失败：' + (err && err.message ? err.message : '未知错误')
+    });
+  }
+});
+
 /* ---------------- 启动 ---------------- */
 
 app.listen(PORT, () => {
