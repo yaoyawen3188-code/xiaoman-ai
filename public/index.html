@@ -303,6 +303,8 @@ let aiApps = [];                         // 伴学页创建的可交互活动（
 let aiRemovedDirs = [];                  // 家长明确去掉的学习方向 key（如 oral/read/calc/other/tt）
 let confirmReply = '';       // 确认页最近一次 AI 回复
 let confirmPlanBusy = false; // 确认页调整请求进行中标记
+let __pendingAppEdit = null;  // AI 编辑活动预览数据
+let __appEditHistory = [];    // 活动编辑对话历史
 
 /* ---------- 伴学页历史持久化 ---------- */
 function syncProfileChatHistory(){
@@ -2377,7 +2379,7 @@ SCRENS.apps = ()=>{
 </div>`;
 };
 
-/* ---------- 活动编辑/删除 ---------- */
+/* ---------- 活动编辑（AI 对话式）/删除 ---------- */
 let __editingAppId = null;
 
 function toggleAppEdit(appId){
@@ -2386,62 +2388,180 @@ function toggleAppEdit(appId){
   if(area.innerHTML){
     area.innerHTML = '';
     __editingAppId = null;
+    __pendingAppEdit = null;
+    __appEditHistory = [];
     return;
   }
   __editingAppId = appId;
+  __pendingAppEdit = null;
+  __appEditHistory = [];
   const apps = loadApps();
   const app = apps.find(a => a.id === appId);
   if(!app) return;
   area.innerHTML = `
     <div class="card" style="margin-top:8px;background:#FFF8EE;border-color:#F2E2C6">
-      <div style="font-weight:800;font-size:13px;color:#B26A1E;margin-bottom:8px">编辑活动</div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <input id="editAppName" class="textbox" placeholder="活动名称" value="${(app.shortName || app.title || '').replace(/"/g, '&quot;')}" style="width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px;font-size:13px;font-family:inherit;outline:none">
-        <input id="editAppDesc" class="textbox" placeholder="一句话简介" value="${(app.shortDesc || (app.content||'').substring(0,30) || '').replace(/"/g, '&quot;')}" style="width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px;font-size:13px;font-family:inherit;outline:none">
-        <input id="editAppDur" type="number" placeholder="时长（分钟）" value="${app.duration || 15}" style="width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px;font-size:13px;font-family:inherit;outline:none">
-        <div style="display:flex;gap:8px;margin-top:4px">
-          <button class="btn sm mint" style="width:auto;padding:8px 14px;font-size:12px" onclick="saveAppEdit('${appId}')">保存</button>
-          <button class="btn sm ghost" style="width:auto;padding:8px 14px;font-size:12px" onclick="toggleAppEdit('${appId}')">取消</button>
+      <div style="font-weight:800;font-size:13px;color:#B26A1E;margin-bottom:10px">🤖 AI 对话编辑活动</div>
+      <div style="display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px">
+        <div style="font-size:28px;flex:none">${app.icon || '🎮'}</div>
+        <div style="flex:1;min-width:0">
+          <b style="font-size:14px">${escapeHtml(app.shortName || app.title || '学习活动')}</b>
+          <p style="font-size:11.5px;color:var(--muted);margin:2px 0 0">${escapeHtml(app.shortDesc || (app.content||'').substring(0,30) || '')} · ${app.duration || 15} 分钟</p>
         </div>
       </div>
+      <div id="appEditChat_${appId}" style="max-height:280px;overflow-y:auto;padding:8px;background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:8px"></div>
+      <div id="appEditPreview_${appId}"></div>
+      <div style="display:flex;gap:8px">
+        <textarea id="editAppInstruction" placeholder="用自然语言告诉 AI 怎么调整… 例如：增加互动问答、难度提高到中等、缩短到10分钟" style="flex:1;resize:none;height:44px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;border-radius:12px;background:#fff;border:1px solid var(--line);color:var(--ink)"></textarea>
+        <button class="btn sm mint" style="width:auto;padding:8px 14px;font-size:12px;white-space:nowrap" onclick="askAppEdit('${appId}')">让AI调整</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end">
+        <button class="btn sm ghost" style="width:auto;padding:7px 14px;font-size:12px" onclick="toggleAppEdit('${appId}')">收起</button>
+      </div>
     </div>`;
+  renderAppEditChat(appId);
 }
 
-function saveAppEdit(appId){
-  const name = (document.getElementById('editAppName')?.value || '').trim();
-  const desc = (document.getElementById('editAppDesc')?.value || '').trim();
-  const dur = Number(document.getElementById('editAppDur')?.value || '15') || 15;
-  if(!name){ toast('请填写活动名称'); return; }
+function escapeHtml(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderAppEditChat(appId){
+  const chat = document.getElementById('appEditChat_' + appId);
+  if(!chat) return;
+  if(__appEditHistory.length === 0){
+    chat.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:16px;line-height:1.6">用自然语言告诉 AI 你想怎么调整这个活动<br>例如：「增加一些互动问答」「难度提高到中等」「缩短到10分钟」</div>';
+    return;
+  }
+  chat.innerHTML = __appEditHistory.map(msg => {
+    const isUser = msg.role === 'user';
+    const bg = isUser ? 'var(--primary-soft)' : 'var(--mint-soft)';
+    const fg = isUser ? 'var(--primary)' : 'var(--mint)';
+    const txt = isUser ? 'var(--ink)' : '#5B7C6F';
+    return '<div style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-start">'
+      + '<div style="width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:14px;flex:none;background:'+bg+';color:'+fg+'">'+(isUser?'🧑':'🤖')+'</div>'
+      + '<div style="flex:1;font-size:12.5px;color:'+txt+';background:'+bg+';border-radius:10px;padding:8px 12px;line-height:1.45;word-break:break-word">'+escapeHtml(msg.content)+'</div>'
+      + '</div>';
+  }).join('');
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function askAppEdit(appId){
+  const inp = document.getElementById('editAppInstruction');
+  const v = (inp?.value || '').trim();
+  if(!v){ toast('请先输入调整指令'); return; }
+
+  __appEditHistory.push({ role: 'user', content: v });
+  inp.value = '';
+  renderAppEditChat(appId);
 
   const apps = loadApps();
   const app = apps.find(a => a.id === appId);
   if(!app) return;
-  app.shortName = name.substring(0, 15);
-  app.shortDesc = desc.substring(0, 50);
-  app.duration = Math.max(5, Math.min(60, dur));
+
+  const chat = document.getElementById('appEditChat_' + appId);
+  if(chat){
+    chat.innerHTML += '<div style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-start">'
+      + '<div style="width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:14px;flex:none;background:var(--mint-soft);color:var(--mint)">🤖</div>'
+      + '<div style="flex:1;font-size:12.5px;color:#5B7C6F;background:var(--mint-soft);border-radius:10px;padding:8px 12px">AI 正在思考调整方案…</div>'
+      + '</div>';
+  }
+
+  try {
+    const res = await fetch('/api/app/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app, instruction: v })
+    });
+    const data = await res.json().catch(() => ({ error: '无效响应' }));
+    if(!res.ok || data.error){
+      throw new Error(data.error || 'HTTP ' + res.status);
+    }
+    __pendingAppEdit = data;
+    __appEditHistory.push({ role: 'assistant', content: '已根据你的指令调整了活动内容，请查看下方预览。点击「确认更新」保存，或继续输入新的调整指令。' });
+    renderAppEditChat(appId);
+    renderAppEditPreview(appId);
+  } catch(err) {
+    __appEditHistory.push({ role: 'assistant', content: '⚠️ ' + (err.message || '调整失败，请稍后重试') });
+    renderAppEditChat(appId);
+  }
+}
+
+function renderAppEditPreview(appId){
+  const area = document.getElementById('appEdit_' + appId);
+  if(!area) return;
+  if(!__pendingAppEdit){
+    const old = document.getElementById('appEditPreview_' + appId);
+    if(old) old.innerHTML = '';
+    return;
+  }
+  const app = __pendingAppEdit;
+  const typeLabel = { oral:'🗣️ 口语练习', reading:'📖 阅读理解', quiz:'❓ 知识问答', other:'🎮 互动活动' }[app.type] || '🎮 互动活动';
+  const diffHtml = (app.difficulties || []).map(d => {
+    const items = (d.items || []).slice(0, 2).map(it => {
+      if(it.en) return '<div style="font-size:12px;color:var(--muted);margin-top:3px">'+escapeHtml(it.en)+' <span style="color:#B26A1E">· '+escapeHtml(it.zh||'')+'</span></div>';
+      return '<div style="font-size:12px;color:var(--muted);margin-top:3px">'+escapeHtml(it.q || it.text || '')+'</div>';
+    }).join('');
+    return '<div style="margin-top:6px"><div style="font-size:12px;font-weight:700;color:var(--ink)">'+escapeHtml(d.level)+' · '+escapeHtml(d.desc||'')+'</div>'+items+'</div>';
+  }).join('');
+
+  let preview = document.getElementById('appEditPreview_' + appId);
+  if(!preview){
+    preview = document.createElement('div');
+    preview.id = 'appEditPreview_' + appId;
+    preview.className = 'app-preview';
+    preview.style.marginTop = '8px';
+    area.appendChild(preview);
+  }
+  preview.innerHTML = '<div style="font-weight:800;font-size:13px;color:#B26A1E;margin-bottom:8px">AI 调整预览</div>'
+    + '<div class="pv-title">'+(app.icon || '🎮')+' '+escapeHtml(app.title||'')+'</div>'
+    + '<div style="font-size:11.5px;color:var(--muted);margin-top:4px">'+typeLabel+' · 建议时长 '+(app.duration||15)+' 分钟</div>'
+    + '<div style="font-size:12.5px;color:var(--ink);margin-top:8px;line-height:1.5">'+escapeHtml(app.content||'')+'</div>'
+    + (diffHtml ? '<div style="margin-top:10px;border-top:1px solid #F2E2C6;padding-top:8px"><div style="font-size:11px;font-weight:800;color:#B26A1E;margin-bottom:4px">难度设置</div>'+diffHtml+'</div>' : '')
+    + '<div style="display:flex;gap:8px;margin-top:12px">'
+    + '<button class="btn sm mint" style="width:auto;padding:8px 14px;font-size:12px" onclick="confirmAppEdit('+'\''+appId+'\''+')">✅ 确认更新</button>'
+    + '<button class="btn sm ghost" style="width:auto;padding:8px 14px;font-size:12px" onclick="__pendingAppEdit=null;var p=document.getElementById(\'appEditPreview_\'+'+'\''+appId+'\''+');if(p)p.innerHTML=\'\'">重新调整</button>'
+    + '</div>';
+}
+
+async function confirmAppEdit(appId){
+  if(!__pendingAppEdit) return;
+  const updatedApp = __pendingAppEdit;
+
+  const apps = loadApps();
+  const app = apps.find(a => a.id === appId);
+  if(!app) return;
+
+  // 合并 AI 返回的字段（保留 id、shortName、shortDesc）
+  Object.assign(app, updatedApp);
+  if(app.title){
+    app.shortName = app.shortName || app.title.substring(0, 10);
+    app.shortDesc = app.shortDesc || (app.content || '').substring(0, 30);
+  }
+  app.duration = Math.max(5, Math.min(60, app.duration || 15));
   saveApps(apps);
 
-  // 同步更新 aiTasks
+  // 同步 aiTasks
   if(aiTasks){
     const task = aiTasks.find(t => t.appId === appId);
     if(task){
-      task.name = app.shortName;
-      task.desc = `${app.duration} 分钟 · ${app.shortDesc}`;
-      task.min = app.duration;
+      task.name = app.shortName || app.title || '学习活动';
+      task.desc = (app.duration || 15) + ' 分钟 · ' + (app.shortDesc || '互动活动');
+      task.min = Math.max(5, Math.min(60, app.duration || 15));
       savePlanState(aiTasks);
     }
   }
-  // 同步更新 aiApps（如果已加载）
+
+  // 同步 aiApps
   if(aiApps){
     const a = aiApps.find(x => x.id === appId);
     if(a){
-      a.shortName = app.shortName;
-      a.shortDesc = app.shortDesc;
-      a.duration = app.duration;
+      Object.assign(a, app);
     }
   }
 
-  toast(`活动「${app.shortName}」已更新 ✓`);
+  toast('活动「' + (app.shortName || app.title) + '」已更新 ✓');
+  __pendingAppEdit = null;
+  __appEditHistory = [];
   toggleAppEdit(appId);
   render();
 }
