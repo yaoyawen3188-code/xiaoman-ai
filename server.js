@@ -409,6 +409,7 @@ app.post('/api/app/create', async (req, res) => {
     return res.json({
       type: 'oral',
       title: '口语练习 · 示例活动',
+      subtitle: '同步学校教材，AI 老师陪练口语',
       content: instructions,
       difficulties: [
         { level: '低', desc: '课文内容', items: [{ en: 'Hello! What\'s your name?', zh: '你好！你叫什么名字？' }] },
@@ -437,9 +438,10 @@ app.post('/api/app/create', async (req, res) => {
     '- 每个难度下要有 3-5 条具体内容（items），oral 类型每条包含 en（英文）和 zh（中文翻译）',
     '',
     '输出 JSON 格式（只输出 JSON，不要其他内容）：',
-    '{"type":"oral","title":"活动标题","content":"内容描述","difficulties":[{"level":"低","desc":"说明","items":[{"en":"英文句子","zh":"中文翻译"}]},{"level":"中","desc":"说明","items":[]},{"level":"高","desc":"说明","items":[]}],"duration":15,"icon":"🗣️"}',
+    '{"type":"oral","title":"活动标题","subtitle":"一句话副标题，不超过40个字","content":"内容描述","difficulties":[{"level":"低","desc":"说明","items":[{"en":"英文句子","zh":"中文翻译"}]},{"level":"中","desc":"说明","items":[]},{"level":"高","desc":"说明","items":[]}],"duration":15,"icon":"🗣️"}',
     '',
     '要求：',
+    '- subtitle：一句话副标题，不超过40个字，概括活动亮点或学习目标',
     '- 内容要真实、适合对应年级的教材内容',
     '- 英文句子要地道、口语化',
     '- 如果家长没有指定教材，按小学中年级水平生成'
@@ -467,6 +469,7 @@ app.post('/api/app/create', async (req, res) => {
       // 规范化
       if (!spec.type) spec.type = 'oral';
       if (!spec.title) spec.title = '学习活动';
+      if (!spec.subtitle) spec.subtitle = (spec.title || '学习活动') + '，趣味互动学习';
       if (!spec.content) spec.content = instructions;
       if (!Array.isArray(spec.difficulties)) spec.difficulties = [];
       if (!spec.duration) spec.duration = 15;
@@ -527,18 +530,19 @@ app.post('/api/app/describe', async (req, res) => {
   if (!SPARK_ENABLED) {
     const title = (spec.title || '学习活动').substring(0, 10);
     const desc = (spec.content || '').substring(0, 30);
-    return res.json({ shortName: title, shortDesc: desc });
+    return res.json({ shortName: title, shortDesc: desc, subtitle: (spec.subtitle || '').substring(0, 40) });
   }
 
   const DESCRIBE_SYSTEM_PROMPT = [
-    '你是「小满伴学」的 AI 活动命名助手。根据活动规格，生成一个简短的活动名称和一句话简介。',
+    '你是「小满伴学」的 AI 活动命名助手。根据活动规格，生成活动名称、一句话副标题和一句话简介。',
     '',
     '要求：',
     '- shortName：不超过 10 个字，简洁有力，适合在列表中显示',
-    '- shortDesc：不超过 30 个字，概括活动内容和亮点',
+    '- subtitle：不超过 40 个字，概括活动亮点或学习目标，适合作为副标题展示',
+    '- shortDesc：不超过 30 个字，概括活动内容',
     '- 不要输出任何其他内容，只输出 JSON',
     '',
-    '输出格式：{"shortName":"名称","shortDesc":"简介"}'
+    '输出格式：{"shortName":"名称","subtitle":"副标题","shortDesc":"简介"}'
   ].join('\n');
 
   const userPrompt = `活动标题：${spec.title || ''}\n活动内容：${spec.content || ''}\n活动类型：${spec.type || 'oral'}\n难度级数：${(spec.difficulties || []).length}`;
@@ -553,15 +557,18 @@ app.post('/api/app/describe', async (req, res) => {
     if (jsonMatch) {
       let parsed = JSON.parse(jsonMatch[0]);
       if (!parsed.shortName) parsed.shortName = (spec.title || '学习活动').substring(0, 10);
+      if (!parsed.subtitle) parsed.subtitle = (spec.subtitle || (spec.title || '学习活动') + '，趣味互动学习').substring(0, 40);
       if (!parsed.shortDesc) parsed.shortDesc = (spec.content || '').substring(0, 30);
       // 截断确保不超长
       parsed.shortName = String(parsed.shortName).substring(0, 15);
+      parsed.subtitle = String(parsed.subtitle).substring(0, 40);
       parsed.shortDesc = String(parsed.shortDesc).substring(0, 50);
       return res.json(parsed);
     }
     // fallback
     return res.json({
       shortName: (spec.title || '学习活动').substring(0, 10),
+      subtitle: (spec.subtitle || '').substring(0, 40),
       shortDesc: (spec.content || '').substring(0, 30)
     });
   } catch (err) {
@@ -591,6 +598,7 @@ app.post('/api/app/update', async (req, res) => {
     '',
     '当前活动信息：',
     `标题：${app.title || ''}`,
+    `副标题：${app.subtitle || ''}`,
     `内容：${app.content || ''}`,
     `类型：${app.type || 'oral'}`,
     `难度：${(app.difficulties || []).map(d => d.level).join('、') || '无'}`,
@@ -599,12 +607,13 @@ app.post('/api/app/update', async (req, res) => {
     '家长的调整指令：' + instruction,
     '',
     '要求：',
-    '- 返回更新后的完整活动 JSON，包含 title, content, type, difficulties, duration, icon 字段',
+    '- 返回更新后的完整活动 JSON，包含 title, subtitle, content, type, difficulties, duration, icon 字段',
+    '- subtitle：一句话副标题，不超过40个字，概括活动亮点或学习目标',
     '- difficulties 数组中每个元素包含 level, desc, items 三个字段',
     '- icon 保持原值或选择合适 emoji',
     '- 只输出 JSON，不要输出任何其他内容',
     '',
-    '输出格式：{"title":"...","content":"...","type":"oral","difficulties":[{"level":"低","desc":"...","items":["..."]}],"duration":15,"icon":"🎮"}'
+    '输出格式：{"title":"...","subtitle":"...","content":"...","type":"oral","difficulties":[{"level":"低","desc":"...","items":["..."]}],"duration":15,"icon":"🎮"}'
   ].join('\n');
 
   try {
