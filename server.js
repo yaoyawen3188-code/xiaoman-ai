@@ -17,6 +17,7 @@
 const express = require('express');
 const path = require('path');
 
+// 小满伴学后端 - AI 陪伴学习硬件 MVP
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
