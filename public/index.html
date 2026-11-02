@@ -613,13 +613,16 @@ async function sendText(input){
   if(!chat) return;
 
   // 家长说「加入书单」但对话历史里没有书名时，修改消息让 AI 先推荐书
-  if(/加入书单|加书单/.test(v)){
+  const BOOK_ADD_RE = /(加入|加到|加进|放进|添加|替换|覆盖|更换)[^，。！？；\n]{0,6}书单|书单[^，。！？；\n]{0,6}(加入|加到|加进|放进|添加|替换|覆盖|更换)/;
+  let askedForRecs = false;
+  if(BOOK_ADD_RE.test(v)){
     const pm = loadProfileChat();
     const aiReplies = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
     const titles = extractBookTitles(aiReplies);
     if(!titles.length){
       // 对话里没有书名，改为让 AI 推荐书籍
       v = '请推荐几本适合子涵（8岁男孩二年级）的课外书，每本用《》标注书名。我要把书加入书单' + (v.includes('覆盖') || v.includes('替换') ? '并覆盖现有的书单' : '');
+      askedForRecs = true;
     }
   }
 
@@ -658,8 +661,8 @@ async function sendText(input){
     toast(`已从书单移除 ${removed.length} 本：${removed.map(t=>t).join('、')}`);
     bookChanged = true;
   }
-  if(/加入书单|加书单/.test(v)){
-    const shouldReplace = /替代|替换|覆盖|换成|清空/.test(v);
+  if(!askedForRecs && BOOK_ADD_RE.test(v)){
+    const shouldReplace = /替代|替换|覆盖|换成|清空|更换|改成|改为|全换/.test(v);
     if(addAiBooks(removed, shouldReplace)){
       bookChanged = true;
     }
