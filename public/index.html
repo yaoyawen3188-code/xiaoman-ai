@@ -323,7 +323,8 @@ function loadProfileChat(){
   try{
     const raw = localStorage.getItem('xm_profile_chat');
     if(!raw) return [];
-    return JSON.parse(raw);
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
   }catch(e){ return []; }
 }
 function saveProfileChat(msgs){
@@ -361,7 +362,8 @@ function loadConfirmChat(){
   try{
     const raw = localStorage.getItem('xm_confirm_chat');
     if(!raw) return [];
-    return JSON.parse(raw);
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
   }catch(e){ return []; }
 }
 function saveConfirmChat(msgs){
@@ -1250,37 +1252,41 @@ function refreshBooks(){
 
 /* ---------- 大模型结果驱动下游页面 ---------- */
 async function gotoDirections(){
-  const ti = document.querySelector('#screenBody .textbox');
-  // 先保存输入框里还没发出去的文字到伴学历史
-  if(ti && ti.value.trim() && !streaming){
-    const v = ti.value.trim();
-    const fromVoice = ti.getAttribute('data-from-voice') === '1';
-    const pm = loadProfileChat();
-    pm.push({ role:'user', content:v, fromVoice });
-    saveProfileChat(pm);
-    chatHistory.push({ role: 'user', content: v });
-  }
-  // 从伴学历史中提取学习方向
-  const pm = loadProfileChat();
-  const userPart = pm.filter(m => m.role === 'user').map(m => m.content).join('\n');
-  const aiPart = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
-  aiPlan = (userPart + '\n' + aiPart).trim();
-  // 只从最近一条家长消息里提取移除意图，避免历史对话里的"去掉"误伤当前方向
-  const lastUserMsg = pm.filter(m => m.role === 'user').pop();
-  const lastUserText = lastUserMsg ? lastUserMsg.content : '';
-  aiRemovedDirs = extractRemovedDirections(lastUserText);
-  aiApps = loadApps();
-  // 调用 AI 自动提取学习方向（不再依赖固定关键词列表）
   try {
-    const res = await fetch('/api/directions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: aiPlan })
-    });
-    const data = await res.json();
-    if(data.directions && data.directions.length){
-      aiDirs = data.directions;
-    } else {
+    const ti = document.querySelector('#screenBody .textbox');
+    // 先保存输入框里还没发出去的文字到伴学历史
+    if(ti && ti.value.trim() && !streaming){
+      const v = ti.value.trim();
+      const fromVoice = ti.getAttribute('data-from-voice') === '1';
+      const pm = loadProfileChat();
+      pm.push({ role:'user', content:v, fromVoice });
+      saveProfileChat(pm);
+      chatHistory.push({ role: 'user', content: v });
+    }
+    // 从伴学历史中提取学习方向
+    const pm = loadProfileChat();
+    const userPart = pm.filter(m => m.role === 'user').map(m => m.content).join('\n');
+    const aiPart = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
+    aiPlan = (userPart + '\n' + aiPart).trim();
+    // 只从最近一条家长消息里提取移除意图，避免历史对话里的"去掉"误伤当前方向
+    const lastUserMsg = pm.filter(m => m.role === 'user').pop();
+    const lastUserText = lastUserMsg ? lastUserMsg.content : '';
+    aiRemovedDirs = extractRemovedDirections(lastUserText);
+    aiApps = loadApps();
+    // 调用 AI 自动提取学习方向（不再依赖固定关键词列表）
+    try {
+      const res = await fetch('/api/directions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: aiPlan })
+      });
+      const data = await res.json();
+      if(data.directions && data.directions.length){
+        aiDirs = data.directions;
+      } else {
+        aiDirs = null;
+      }
+    } catch(e){
       aiDirs = null;
     }
   } catch(e){
