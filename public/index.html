@@ -1200,14 +1200,17 @@ function refreshBooks(){
 }
 
 /* ---------- 大模型结果驱动下游页面 ---------- */
-async function gotoDirections(){
+function gotoDirections(){
   const ti = document.querySelector('#screenBody .textbox');
-  // 有未发送的文字时先发给 AI（后台执行，不阻塞跳转）
+  // 先保存输入框里还没发出去的文字到伴学历史
   if(ti && ti.value.trim() && !streaming){
-    sendText(ti).catch(()=>{});
+    const v = ti.value.trim();
+    const fromVoice = ti.getAttribute('data-from-voice') === '1';
+    const pm = loadProfileChat();
+    pm.push({ role:'user', content:v, fromVoice });
+    saveProfileChat(pm);
+    chatHistory.push({ role: 'user', content: v });
   }
-  // 等待 sendText 同步部分（保存用户消息）完成
-  await new Promise(r=>setTimeout(r, 50));
   // 从伴学历史中提取学习方向
   const pm = loadProfileChat();
   const userPart = pm.filter(m => m.role === 'user').map(m => m.content).join('\n');
