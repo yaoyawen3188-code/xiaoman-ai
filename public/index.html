@@ -1230,7 +1230,10 @@ function extractBookTitles(text){
 }
 
 function addAiBooks(excludeTitles, replaceAll){
-  const titles = extractBookTitles(lastAiReply);
+  // 从整个伴学对话历史中搜索书名，不只是最后一条 AI 回复
+  const pm = loadProfileChat();
+  const aiReplies = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
+  const titles = extractBookTitles(aiReplies);
   if(!titles.length){
     toast('AI 回复里没有识别到《书名》。可到「兴趣书单」页用「＋添加书籍」手动添加。');
     return false;
