@@ -297,8 +297,8 @@ let chatHistory = [];
 let streaming = false;
 let checkQStreaming = false;
 let lastAiReply = '';
-let aiPlan = '';
-let aiDirs = null;
+let aiPlan = loadAiPlan();
+let aiDirs = loadAiDirs();
 let aiTasks = loadPlanState();          // 大模型调整后返回的结构化学习任务（本地持久化）
 let aiApps = [];                         // 伴学页创建的可交互活动（每次进入方向页时加载）
 let aiRemovedDirs = [];                  // 家长明确去掉的学习方向 key（如 oral/read/calc/other/tt）
@@ -384,6 +384,25 @@ function loadPlanState(){
 }
 function savePlanState(tasks){
   try{ localStorage.setItem('xm_plan_tasks', JSON.stringify(tasks)); }catch(e){}
+}
+
+/* ---------- AI 方向与计划内容持久化（保证刷新后内容稳定） ---------- */
+function saveAiDirs(dirs){
+  try{ localStorage.setItem('xm_ai_dirs', JSON.stringify(dirs || null)); }catch(e){}
+}
+function loadAiDirs(){
+  try{
+    const raw = localStorage.getItem('xm_ai_dirs');
+    if(!raw) return null;
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : null;
+  }catch(e){ return null; }
+}
+function saveAiPlan(plan){
+  try{ localStorage.setItem('xm_ai_plan', plan || ''); }catch(e){}
+}
+function loadAiPlan(){
+  try{ return localStorage.getItem('xm_ai_plan') || ''; }catch(e){ return ''; }
 }
 
 /* ---------- 学习验收页 AI 问题持久化 ---------- */
@@ -1272,6 +1291,7 @@ async function gotoDirections(){
     const userPart = pm.filter(m => m.role === 'user').map(m => m.content).join('\n');
     const aiPart = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
     aiPlan = (userPart + '\n' + aiPart).trim();
+    saveAiPlan(aiPlan);
     // 只从最近一条家长消息里提取移除意图，避免历史对话里的"去掉"误伤当前方向
     const lastUserMsg = pm.filter(m => m.role === 'user').pop();
     const lastUserText = lastUserMsg ? lastUserMsg.content : '';
@@ -1298,6 +1318,7 @@ async function gotoDirections(){
     } else {
       aiDirs = null;
     }
+    saveAiDirs(aiDirs);
   } catch(e){
     aiDirs = null;
   }
