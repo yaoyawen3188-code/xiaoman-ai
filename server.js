@@ -73,7 +73,7 @@ const CHECK_SYSTEM_PROMPT = [
 
 /* ---------------- 星辰 MaaS 调用 ---------------- */
 
-async function callSpark(messages, { systemPrompt = SYSTEM_PROMPT } = {}) {
+async function callSpark(messages, { systemPrompt = SYSTEM_PROMPT, temperature = SPARK_TEMPERATURE } = {}) {
   if (!SPARK_ENABLED) {
     throw new Error('SPARK_DISABLED');
   }
@@ -95,7 +95,7 @@ async function callSpark(messages, { systemPrompt = SYSTEM_PROMPT } = {}) {
       model: SPARK_MODEL,
       messages: text.map((m) => ({ role: m.role, content: m.content })),
       max_tokens: SPARK_MAX_TOKENS,
-      temperature: SPARK_TEMPERATURE,
+      temperature: temperature,
       thinking: { type: 'disabled' }
     })
   });
@@ -336,7 +336,7 @@ app.post('/api/directions', async (req, res) => {
   try {
     const reply = await callSpark(
       [{ role: 'user', content: `对话内容：\n${text}` }],
-      { systemPrompt: DIRECTIONS_SYSTEM_PROMPT }
+      { systemPrompt: DIRECTIONS_SYSTEM_PROMPT, temperature: 0.2 }
     );
 
     const jsonMatch = reply.match(/\[[\s\S]*\]/);
