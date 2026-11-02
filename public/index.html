@@ -298,6 +298,7 @@ let streaming = false;
 let checkQStreaming = false;
 let lastAiReply = '';
 let aiPlan = '';
+let aiDirs = null;
 let aiTasks = loadPlanState();          // 大模型调整后返回的结构化学习任务（本地持久化）
 let aiApps = [];                         // 伴学页创建的可交互活动（每次进入方向页时加载）
 let aiRemovedDirs = [];                  // 家长明确去掉的学习方向 key（如 oral/read/calc/other/tt）
@@ -516,10 +517,38 @@ function extractRemovedDirections(text){
   return removed;
 }
 
+/* ---------- 根据方向名称映射图标/颜色/标签 ---------- */
+function dirStyle(name){
+  const n = name || '';
+  if(/阅读|书|绘本|读书/.test(n)) return { icon:'📖', color:'mint', tag:'兴趣书单' };
+  if(/计算|口算|算术|数学|天天练|练习/.test(n)) return { icon:'📐', color:'mint', tag:'同步练习' };
+  if(/口语|英语|陪练|跟读|朗读/.test(n)) return { icon:'🗣️', color:'coral', tag:'教材同步' };
+  if(/作业|家庭作业|学校作业|课后作业|校内任务/.test(n)) return { icon:'✏️', color:'mint', tag:'校内作业' };
+  if(/兴趣|钢琴|围棋|运动|习惯|打卡|其他/.test(n)) return { icon:'🎹', color:'indigo', tag:'每日打卡' };
+  return { icon:'🎯', color:'indigo', tag:'每日任务' };
+}
+
 /* ---------- 根据 AI 回复动态生成方向卡片 ---------- */
+function getNormalizedDirs(){
+  if(aiDirs && aiDirs.length){
+    return aiDirs.map(d => {
+      const style = dirStyle(d.name);
+      const n = d.name || '';
+      let key = 'custom';
+      if(/阅读|书|绘本|读书/.test(n)) key = 'read';
+      else if(/计算|口算|算术|数学|天天练|练习/.test(n)) key = 'tt';
+      else if(/口语|英语|陪练|跟读|朗读/.test(n)) key = 'oral';
+      else if(/作业|家庭作业|学校作业|课后作业|校内任务/.test(n)) key = 'hw';
+      else if(/兴趣|钢琴|围棋|运动|习惯|打卡|其他/.test(n)) key = 'other';
+      return { key, title:d.name, icon:style.icon, desc:d.desc || '', min:d.minutes || 20, beforeDinner:false };
+    });
+  }
+  return extractDirections(aiPlan || '');
+}
+
 function genDirCards(text){
   if(!text) return '';
-  const dirs = extractDirections(text);
+  const dirs = getNormalizedDirs();
   // 过滤掉家长明确去掉的方向
   if(aiRemovedDirs && aiRemovedDirs.length){
     const removedSet = new Set(aiRemovedDirs);
@@ -531,14 +560,18 @@ function genDirCards(text){
   const colorOf = (k) => ({hw:'mint',tt:'mint',read:'mint',calc:'amber',oral:'coral',other:'indigo'})[k];
   const ctxTag = { hw:'校内作业', tt:'同步练习', read:'兴趣书单', calc:'校内同步', oral:'教材同步', other:'每日打卡' };
   return dirs.map(d => {
-    const color = colorOf(d.key);
-    const readBtn = d.key === 'read' ? `<button class="btn sm mint" style="margin-top:10px;width:auto;padding:8px 14px" onclick="push('reading')">查看书单 →</button>` : '';
+    // AI 提取的方向用 dirStyle 动态映射颜色/标签，关键词提取的方向用固定映射
+    const style = aiDirs && aiDirs.length ? dirStyle(d.title) : null;
+    const color = style ? style.color : colorOf(d.key);
+    const tag = style ? style.tag : ctxTag[d.key];
+    const isRead = /阅读|书|绘本|读书/.test(d.title);
+    const readBtn = isRead ? `<button class="btn sm mint" style="margin-top:10px;width:auto;padding:8px 14px" onclick="push('reading')">查看书单 →</button>` : '';
     return `<div class="dir-card">
       <div class="icon ${color}">${d.icon}</div>
       <div class="body">
         <h4>${d.title}</h4>
         <p>${d.desc}</p>
-        <div class="meta"><span class="tag indigo">${ctxTag[d.key]}</span></div>
+        <div class="meta"><span class="tag indigo">${tag}</span></div>
         ${readBtn}
       </div>
     </div>`;
@@ -1216,7 +1249,7 @@ function refreshBooks(){
 }
 
 /* ---------- 大模型结果驱动下游页面 ---------- */
-function gotoDirections(){
+async function gotoDirections(){
   const ti = document.querySelector('#screenBody .textbox');
   // 先保存输入框里还没发出去的文字到伴学历史
   if(ti && ti.value.trim() && !streaming){
@@ -1234,6 +1267,22 @@ function gotoDirections(){
   aiPlan = (userPart + '\n' + aiPart).trim();
   aiRemovedDirs = extractRemovedDirections(userPart);
   aiApps = loadApps();
+  // 调用 AI 自动提取学习方向（不再依赖固定关键词列表）
+  try {
+    const res = await fetch('/api/directions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: aiPlan })
+    });
+    const data = await res.json();
+    if(data.directions && data.directions.length){
+      aiDirs = data.directions;
+    } else {
+      aiDirs = null;
+    }
+  } catch(e){
+    aiDirs = null;
+  }
   push('directions');
 }
 
@@ -1825,7 +1874,7 @@ function planTasks(){
     const text = aiPlan || '';
     const bookMatch = text.match(/《([^》]+)》/);
     const book = bookMatch ? '《' + bookMatch[1].trim() + '》' : defaultBook();
-    const dirs = extractDirections(text);
+    const dirs = getNormalizedDirs();
     // 过滤掉家长明确去掉的方向
     if(aiRemovedDirs && aiRemovedDirs.length){
       const removedSet = new Set(aiRemovedDirs);
