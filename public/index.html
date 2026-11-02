@@ -607,10 +607,21 @@ function render(){
 }
 
 async function sendText(input){
-  const v = input.value.trim();
+  let v = input.value.trim();
   if(!v || streaming) return;
   const chat = document.querySelector('.chat');
   if(!chat) return;
+
+  // 家长说「加入书单」但对话历史里没有书名时，修改消息让 AI 先推荐书
+  if(/加入书单|加书单/.test(v)){
+    const pm = loadProfileChat();
+    const aiReplies = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
+    const titles = extractBookTitles(aiReplies);
+    if(!titles.length){
+      // 对话里没有书名，改为让 AI 推荐书籍
+      v = '请推荐几本适合子涵（8岁男孩二年级）的课外书，每本用《》标注书名。我要把书加入书单' + (v.includes('覆盖') || v.includes('替换') ? '并覆盖现有的书单' : '');
+    }
+  }
 
   // 家长消息
   const fromVoice = input && input.getAttribute('data-from-voice') === '1';
