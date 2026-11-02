@@ -313,6 +313,14 @@ if(!aiPlan){
     if(aiPlan) saveAiPlan(aiPlan);
   }
 }
+
+// 启动时：重新提取 aiRemovedDirs，清除历史误判
+const startupMsgs = loadProfileChat();
+if(startupMsgs && startupMsgs.length){
+  const allStartup = startupMsgs.filter(m => m.role === 'user').map(m => m.content).join('\n');
+  aiRemovedDirs = extractRemovedDirections(allStartup);
+  saveAiRemovedDirs(aiRemovedDirs);
+}
 let confirmReply = '';       // 确认页最近一次 AI 回复
 let confirmPlanBusy = false; // 确认页调整请求进行中标记
 let __pendingAppEdit = null;  // AI 编辑活动预览数据
@@ -517,50 +525,56 @@ function extractRemovedDirections(text){
   text = text || '';
   const removed = [];
   const groups = [
-    { key:'hw',    kw:['家庭作业','学校作业','课后作业','作业','家庭任务'] },
+    { key:'hw',    kw:['家庭作业','学校作业','课后作业','作业'] },
     { key:'oral', kw:['口语','口语陪练','英语陪练','英语口语'] },
     { key:'read', kw:['阅读','读书','绘本阅读'] },
     { key:'calc', kw:['计算','口算','数学计算','算术'] },
-    { key:'tt',   kw:['数学天天练','天天练','每日练习','数学练习'] },
+    { key:'tt',   kw:['数学天天练','天天练','每日练习'] },
     { key:'other', kw:['兴趣','钢琴','围棋','运动','习惯培养'] }
   ];
-  // 去掉/移除/删除/不要/不需要/取消 等否定表达
-  const negPatterns = [
-    /(?:去掉|移除|删除|删掉|去掉|不要|不需要|取消|不需要|去掉|去掉)\s*(?:方向|任务|内容|安排|计划)?\s*(?:把)?\s*(?:《[^》]+》|[^，,。!?？！\s]{1,15})/g,
-    /(?:把|请把|帮)\s*(?:《[^》]+》|[^，,。!?？！\s]{1,15})\s*(?:去掉|移除|删除|删掉|不要)/g,
-    /(?:《[^》]+》|[^，,。!?？！\s]{1,15})\s*(?:不要|去掉|移除|删除|删掉|不需要)/g,
-    /不要\s*(?:《[^》]+》|[^，,。!?？！\s]{1,15})/g,
-    /不需要\s*(?:《[^》]+》|[^，,。!?？！\s]{1,15})/g
-  ];
+
+  // 反向表达检测：「不要取消X」「不要去掉X」等 = 保留X，不是移除
+  function isReverseCtx(before, after){
+    const ctx = (before || '') + (after || '');
+    const revPats = [
+      /不要(?:取消|去掉|移除|删除|删掉|恢复|加上|添加|重新加|保留|改)/,
+      /不需要(?:取消|去掉|移除|删除|删掉|恢复|加上|添加|重新加|保留|改)/,
+      /别(?:取消|去掉|移除|删除|删掉|恢复|加上|添加|重新加|保留)/,
+    ];
+    for(const p of revPats){
+      if(p.test(ctx)) return true;
+    }
+    return false;
+  }
+
+  const negWords = ['去掉','移除','删除','删掉','不要','不需要','取消'];
 
   for(const g of groups){
-    for(const pat of negPatterns){
-      let m;
-      while((m = pat.exec(text))){
-        const target = m[0];
-        // 检查 target 是否包含该组的关键词
-        for(const kw of g.kw){
-          if(target.indexOf(kw) >= 0){
-            if(!removed.includes(g.key)) removed.push(g.key);
-            break;
-          }
-        }
-      }
-    }
-    // 也检查整句是否包含否定词和关键词同时出现
-    const negWords = ['去掉','移除','删除','删掉','不要','不需要','取消','去掉'];
     for(const kw of g.kw){
       let idx = text.indexOf(kw);
       while(idx >= 0){
-        const start = Math.max(0, idx - 30);
-        const end = Math.min(text.length, idx + 20);
-        const seg = text.slice(start, end);
-        for(const neg of negWords){
-          if(seg.indexOf(neg) >= 0){
-            if(!removed.includes(g.key)) removed.push(g.key);
+        const before = text.substring(Math.max(0, idx - 12), idx);
+        const after = text.substring(idx, Math.min(text.length, idx + kw.length + 12));
+
+        // 反向表达 → 保留，跳过
+        if(isReverseCtx(before, after)){
+          idx = text.indexOf(kw, idx + 1);
+          continue;
+        }
+
+        // 正向否定词检测
+        let foundNeg = false;
+        for(const nw of negWords){
+          if(before.indexOf(nw) >= 0 || after.indexOf(nw) >= 0){
+            foundNeg = true;
             break;
           }
         }
+
+        if(foundNeg && !removed.includes(g.key)){
+          removed.push(g.key);
+        }
+
         idx = text.indexOf(kw, idx + 1);
       }
     }
@@ -1658,6 +1672,22 @@ SCRENS.confirm = ()=>{
 };
 
 function confirmPlan(){
+  // 保存当前计划任务，避免确认后首页重新从方向推导
+  const tasks = planTasks();
+  if(tasks && tasks.length){
+    aiTasks = tasks.map(t => ({
+      name: t.name,
+      icon: t.icon,
+      desc: t.desc,
+      min: t.min,
+      beforeDinner: t.beforeDinner,
+      arrow: !!t.arrow,
+      appType: t.appType || '',
+      appId: t.appId || '',
+      onclick: t.onclick || 'toggleTask(this)'
+    }));
+    savePlanState(aiTasks);
+  }
   saveConfirmedVersion();
   toast('学习计划已确认，并下发到「小满」设备 🤖');
   goto('home');
