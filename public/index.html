@@ -301,7 +301,18 @@ let aiPlan = loadAiPlan();
 let aiDirs = loadAiDirs();
 let aiTasks = loadPlanState();          // 大模型调整后返回的结构化学习任务（本地持久化）
 let aiApps = [];                         // 伴学页创建的可交互活动（每次进入方向页时加载）
-let aiRemovedDirs = [];                  // 家长明确去掉的学习方向 key（如 oral/read/calc/other/tt）
+let aiRemovedDirs = loadAiRemovedDirs(); // 家长明确去掉的学习方向 key（如 oral/read/calc/other/tt）
+
+// 启动时：如果 aiPlan 为空，从伴学对话历史自动派生，保证刷新后内容一致
+if(!aiPlan){
+  const pm0 = loadProfileChat();
+  if(pm0 && pm0.length){
+    const up = pm0.filter(m => m.role === 'user').map(m => m.content).join('\n');
+    const ap = pm0.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
+    aiPlan = (up + '\n' + ap).trim();
+    if(aiPlan) saveAiPlan(aiPlan);
+  }
+}
 let confirmReply = '';       // 确认页最近一次 AI 回复
 let confirmPlanBusy = false; // 确认页调整请求进行中标记
 let __pendingAppEdit = null;  // AI 编辑活动预览数据
@@ -409,6 +420,19 @@ function saveAiPlan(plan){
 }
 function loadAiPlan(){
   try{ return localStorage.getItem('xm_ai_plan') || ''; }catch(e){ return ''; }
+}
+
+/* ---------- 家长去掉的学习方向持久化 ---------- */
+function loadAiRemovedDirs(){
+  try{
+    const raw = localStorage.getItem('xm_ai_removed_dirs');
+    if(!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  }catch(e){ return []; }
+}
+function saveAiRemovedDirs(dirs){
+  try{ localStorage.setItem('xm_ai_removed_dirs', JSON.stringify(dirs || [])); }catch(e){}
 }
 
 /* ---------- 学习验收页 AI 问题持久化 ---------- */
@@ -574,7 +598,9 @@ function getNormalizedDirs(){
 }
 
 function genDirCards(text){
-  if(!text) return '';
+  if(!text){
+    return '<div class="hero"><h3>子涵 · 每日计划候选</h3><p>先到「伴学」里和孩子聊聊兴趣、年级和培养期望，AI 会帮你生成专属学习方向。计划安排在放学后 17:30-21:30，预留晚饭、休息与睡前洗漱时间。</p></div>';
+  }
   let dirs = getNormalizedDirs();
   // 过滤掉家长明确去掉的方向
   if(aiRemovedDirs && aiRemovedDirs.length){
@@ -1298,16 +1324,17 @@ async function gotoDirections(){
     const aiPart = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
     aiPlan = (userPart + '\n' + aiPart).trim();
     saveAiPlan(aiPlan);
-    // 只从最近一条家长消息里提取移除意图，避免历史对话里的"去掉"误伤当前方向
-    const lastUserMsg = pm.filter(m => m.role === 'user').pop();
-    const lastUserText = lastUserMsg ? lastUserMsg.content : '';
-    aiRemovedDirs = extractRemovedDirections(lastUserText);
+    // 扫描所有家长消息提取移除意图，保证跨多轮对话的移除操作持续生效
+    const allUserMsgs = pm.filter(m => m.role === 'user').map(m => m.content).join('\n');
+    aiRemovedDirs = extractRemovedDirections(allUserMsgs);
+    saveAiRemovedDirs(aiRemovedDirs);
     aiApps = loadApps();
     // 立即跳转到学习方向页面，给出即时反馈
     push('directions');
   } catch(e){
     aiPlan = '';
     aiRemovedDirs = [];
+    saveAiRemovedDirs([]);
     aiApps = [];
     push('directions');
   }
@@ -1594,44 +1621,7 @@ SCRENS.directions = ()=>{
   return `
 <div class="wrap fade">
   <div class="head"><div class="back" onclick="goBack()">‹</div><h2>AI 学习方向</h2><span class="tag ${aiPlan?'mint':'amber'}">${aiPlan?'AI 生成':'示例'}</span></div>
-  ${aiPlan ? `
-    ${genDirCards(aiPlan)}
-  ` : `
-    <div class="hero"><h3>子涵 · 每日计划候选</h3><p>基于年龄、兴趣与培养期望，AI 给出四个方向。计划安排在放学后 17:30-21:30，预留晚饭、休息与睡前洗漱时间。</p></div>
-    <div class="dir-card">
-      <div class="icon mint">📖</div>
-      <div class="body">
-        <h4>阅读能力</h4>
-        <p>符合年龄 + 兴趣的书单（如《神奇校车》系列），科学拆分每日阅读时间。</p>
-        <div class="meta"><span class="tag coral">兴趣书单</span></div>
-        <button class="btn sm mint" style="margin-top:10px;width:auto;padding:8px 14px" onclick="push('reading')">查看书单 →</button>
-      </div>
-    </div>
-    <div class="dir-card">
-      <div class="icon amber">🔢</div>
-      <div class="body">
-        <h4>计算能力</h4>
-        <p>结合校内任务与口算练习，按兴趣安排每日时长，保持数学状态。</p>
-        <div class="meta"><span class="tag indigo">校内同步</span></div>
-      </div>
-    </div>
-    <div class="dir-card">
-      <div class="icon coral">🗣️</div>
-      <div class="body">
-        <h4>口语陪练</h4>
-        <p>AI 按子涵英语水平扮演英语老师陪练，内容同步学校教材并适当扩展。</p>
-        <div class="meta"><span class="tag indigo">学校教材同步</span><span class="tag mint">克隆音色</span></div>
-      </div>
-    </div>
-    <div class="dir-card">
-      <div class="icon indigo">🎹</div>
-      <div class="body">
-        <h4>其他 · 兴趣与习惯</h4>
-        <p>钢琴、围棋打卡，以及专注坐姿、屏幕时间等习惯培养。</p>
-        <div class="meta"><span class="tag indigo">每日打卡</span><span class="tag coral">可扩展</span></div>
-      </div>
-    </div>
-  `}
+  ${genDirCards(aiPlan)}
   ${genAppCards()}
   ${planConfirmed ? (hasUpdate
     ? `<button class="btn" onclick="push('confirm')">更新计划</button>
