@@ -496,7 +496,7 @@ function extractRemovedDirections(text){
     // 也检查整句是否包含否定词和关键词同时出现
     const negWords = ['去掉','移除','删除','删掉','不要','不需要','取消','去掉'];
     for(const kw of g.kw){
-      const idx = text.indexOf(kw);
+      let idx = text.indexOf(kw);
       while(idx >= 0){
         const start = Math.max(0, idx - 30);
         const end = Math.min(text.length, idx + 20);
