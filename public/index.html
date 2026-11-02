@@ -416,13 +416,14 @@ function saveApps(apps){
 function extractDirections(text){
   text = text || '';
   const groups = [
+    { key:'hw', kw:['家庭作业','学校作业','课后作业','作业','家庭任务'], icon:'✏️', title:'家庭作业', desc:'完成学校布置的家庭作业，结合放学后时间合理安排。' },
     { key:'tt', kw:['数学天天练','数学每日练习','天天练','每日练习','每日练','数学练习'], icon:'📐', title:'学习天天练', desc:'结合「天天练」每日练习内容，安排对应时长并跟踪完成情况。' },
     { key:'read', kw:['阅读','书单','书籍','绘本'], icon:'📖', title:'阅读能力', desc:'符合年龄 + 兴趣的书单，科学拆分每日阅读时间。' },
     { key:'calc', kw:['口算','计算','算术','数学计算'], icon:'🔢', title:'计算能力', desc:'结合校内任务与口算练习，按兴趣安排每日时长。' },
     { key:'oral', kw:['口语','英语','陪练','跟读'], icon:'🗣️', title:'口语陪练', desc:'AI 扮演英语老师陪练，内容同步学校教材并适当扩展。' },
     { key:'other', kw:['钢琴','围棋','兴趣','运动','习惯'], icon:'🎹', title:'其他 · 兴趣与习惯', desc:'兴趣班打卡，以及专注坐姿、屏幕时间等习惯培养。' }
   ];
-  const defaultMin = { tt:15, read:25, calc:15, oral:15, other:30 };
+  const defaultMin = { hw:30, tt:15, read:25, calc:15, oral:15, other:30 };
   const directives = ['方向','单独','模块','核心','列为','重点','重要','作为','计划','安排','培养','需要'];
   const out = [];
   for(const g of groups){
@@ -464,6 +465,7 @@ function extractRemovedDirections(text){
   text = text || '';
   const removed = [];
   const groups = [
+    { key:'hw',    kw:['家庭作业','学校作业','课后作业','作业','家庭任务'] },
     { key:'oral', kw:['口语','口语陪练','英语陪练','英语口语'] },
     { key:'read', kw:['阅读','读书','绘本阅读'] },
     { key:'calc', kw:['计算','口算','数学计算','算术'] },
@@ -526,8 +528,8 @@ function genDirCards(text){
   if(!dirs.length){
     return `<div style="text-align:center;color:var(--muted);padding:24px 16px;font-size:13px;line-height:1.6">还没有识别到学习方向。可以先在「伴学」里继续说明，例如「阅读能力作为单独一个学习方向」。</div>`;
   }
-  const colorOf = (k) => ({tt:'mint',read:'mint',calc:'amber',oral:'coral',other:'indigo'})[k];
-  const ctxTag = { tt:'同步练习', read:'兴趣书单', calc:'校内同步', oral:'教材同步', other:'每日打卡' };
+  const colorOf = (k) => ({hw:'mint',tt:'mint',read:'mint',calc:'amber',oral:'coral',other:'indigo'})[k];
+  const ctxTag = { hw:'校内作业', tt:'同步练习', read:'兴趣书单', calc:'校内同步', oral:'教材同步', other:'每日打卡' };
   return dirs.map(d => {
     const color = colorOf(d.key);
     const readBtn = d.key === 'read' ? `<button class="btn sm mint" style="margin-top:10px;width:auto;padding:8px 14px" onclick="push('reading')">查看书单 →</button>` : '';
@@ -1837,6 +1839,9 @@ function planTasks(){
       if(d.key === 'tt'){
         name = '数学天天练';
         desc = `${fmtMin(d.min)} · 单独任务 · 校内练习`;
+      } else if(d.key === 'hw'){
+        name = '家庭作业';
+        desc = `${fmtMin(d.min)} · 学校作业 · 完成打卡`;
       } else if(d.key === 'read'){
         name = `阅读 · ${book}`;
         desc = `${fmtMin(d.min)} · 查看兴趣书单`;
