@@ -1252,6 +1252,10 @@ function refreshBooks(){
 
 /* ---------- 大模型结果驱动下游页面 ---------- */
 async function gotoDirections(){
+  // 按钮防抖：正在处理时忽略重复点击
+  const btn = document.getElementById('nextBtn');
+  if(btn && btn.dataset.busy === '1') return;
+  if(btn){ btn.dataset.busy = '1'; btn.textContent = '正在生成…'; btn.disabled = true; }
   try {
     const ti = document.querySelector('#screenBody .textbox');
     // 先保存输入框里还没发出去的文字到伴学历史
@@ -1273,26 +1277,36 @@ async function gotoDirections(){
     const lastUserText = lastUserMsg ? lastUserMsg.content : '';
     aiRemovedDirs = extractRemovedDirections(lastUserText);
     aiApps = loadApps();
-    // 调用 AI 自动提取学习方向（不再依赖固定关键词列表）
-    try {
-      const res = await fetch('/api/directions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: aiPlan })
-      });
-      const data = await res.json();
-      if(data.directions && data.directions.length){
-        aiDirs = data.directions;
-      } else {
-        aiDirs = null;
-      }
-    } catch(e){
+    // 立即跳转到学习方向页面，给出即时反馈
+    push('directions');
+  } catch(e){
+    aiPlan = '';
+    aiRemovedDirs = [];
+    aiApps = [];
+    push('directions');
+  }
+  // 后台调用 AI 自动提取学习方向（不阻塞页面跳转）
+  try {
+    const res = await fetch('/api/directions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: aiPlan })
+    });
+    const data = await res.json();
+    if(data.directions && data.directions.length){
+      aiDirs = data.directions;
+    } else {
       aiDirs = null;
     }
   } catch(e){
     aiDirs = null;
   }
-  push('directions');
+  // AI 提取完成后重新渲染当前页面，更新方向卡片
+  if(stack[stack.length-1] === 'directions'){
+    render();
+  }
+  // 恢复按钮状态
+  if(btn){ btn.dataset.busy = '0'; btn.textContent = '下一步 →'; btn.disabled = false; }
 }
 
 function extractBookTitles(text){
