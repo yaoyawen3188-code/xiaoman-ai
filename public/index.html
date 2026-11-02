@@ -550,7 +550,7 @@ function getNormalizedDirs(){
 
 function genDirCards(text){
   if(!text) return '';
-  const dirs = getNormalizedDirs();
+  let dirs = getNormalizedDirs();
   // 过滤掉家长明确去掉的方向
   if(aiRemovedDirs && aiRemovedDirs.length){
     const removedSet = new Set(aiRemovedDirs);
