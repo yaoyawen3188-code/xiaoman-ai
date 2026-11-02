@@ -389,6 +389,7 @@ function savePlanState(tasks){
 /* ---------- AI 方向与计划内容持久化（保证刷新后内容稳定） ---------- */
 function saveAiDirs(dirs){
   try{ localStorage.setItem('xm_ai_dirs', JSON.stringify(dirs || null)); }catch(e){}
+  try{ localStorage.setItem('xm_ai_dirs_version', String(getProfileVersion())); }catch(e){}
 }
 function loadAiDirs(){
   try{
@@ -397,6 +398,11 @@ function loadAiDirs(){
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? arr : null;
   }catch(e){ return null; }
+}
+function aiDirsStale(){
+  // 对话版本变化时，AI 方向需要重新生成
+  const saved = Number(localStorage.getItem('xm_ai_dirs_version') || 0);
+  return saved !== getProfileVersion();
 }
 function saveAiPlan(plan){
   try{ localStorage.setItem('xm_ai_plan', plan || ''); }catch(e){}
@@ -1306,21 +1312,26 @@ async function gotoDirections(){
     push('directions');
   }
   // 后台调用 AI 自动提取学习方向（不阻塞页面跳转）
-  try {
-    const res = await fetch('/api/directions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: aiPlan })
-    });
-    const data = await res.json();
-    if(data.directions && data.directions.length){
-      aiDirs = data.directions;
-    } else {
+  // 如果对话没有变化且已有 AI 方向，则跳过调用，保证内容稳定
+  if(aiDirs && aiDirs.length && !aiDirsStale()){
+    // 直接使用已有的 AI 方向
+  } else {
+    try {
+      const res = await fetch('/api/directions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: aiPlan })
+      });
+      const data = await res.json();
+      if(data.directions && data.directions.length){
+        aiDirs = data.directions;
+      } else {
+        aiDirs = null;
+      }
+      saveAiDirs(aiDirs);
+    } catch(e){
       aiDirs = null;
     }
-    saveAiDirs(aiDirs);
-  } catch(e){
-    aiDirs = null;
   }
   // AI 提取完成后重新渲染当前页面，更新方向卡片
   if(stack[stack.length-1] === 'directions'){
