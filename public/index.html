@@ -1265,7 +1265,10 @@ async function gotoDirections(){
   const userPart = pm.filter(m => m.role === 'user').map(m => m.content).join('\n');
   const aiPart = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
   aiPlan = (userPart + '\n' + aiPart).trim();
-  aiRemovedDirs = extractRemovedDirections(userPart);
+  // 只从最近一条家长消息里提取移除意图，避免历史对话里的"去掉"误伤当前方向
+  const lastUserMsg = pm.filter(m => m.role === 'user').pop();
+  const lastUserText = lastUserMsg ? lastUserMsg.content : '';
+  aiRemovedDirs = extractRemovedDirections(lastUserText);
   aiApps = loadApps();
   // 调用 AI 自动提取学习方向（不再依赖固定关键词列表）
   try {
