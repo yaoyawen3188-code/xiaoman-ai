@@ -308,6 +308,51 @@ function applyRequestedDurationToTasks(parsed, request){
   return { changed: true, taskName: task.name || '该任务', min };
 }
 
+/* 学习方向提取：从伴学对话历史中自动识别学习方向 */
+app.post('/api/directions', async (req, res) => {
+  const text = (req.body?.text || '').trim();
+  if (!text) return res.status(400).json({ directions: [], error: '请提供对话内容' });
+
+  if (!SPARK_ENABLED) {
+    return res.json({ directions: [], error: '演示模式' });
+  }
+
+  const DIRECTIONS_SYSTEM_PROMPT = [
+    '你是「小满伴学」的学习方向提取助手。',
+    '请从下面的家长与AI对话中，提取出家长确认或提及的所有"学习方向"。',
+    '学习方向是指家长希望孩子每天进行的学习活动类型，例如：阅读能力、计算能力、口语陪练、家庭作业、校内任务、兴趣班、运动习惯等。',
+    '只提取家长明确提到或确认的方向，不要凭空添加，也不要遗漏。',
+    '',
+    '每个方向包含：',
+    '- name：方向名称，简短中文，不超过10个字',
+    '- desc：一句话描述该方向的重点，不超过30个字',
+    '- minutes：建议每日分钟数（10-60之间）',
+    '',
+    '输出 JSON 数组，格式：',
+    '[{"name":"阅读能力","desc":"符合年龄+兴趣的书单","minutes":25}]',
+    '只输出 JSON 数组，不要输出任何其他内容。'
+  ].join('\n');
+
+  try {
+    const reply = await callSpark(
+      [{ role: 'user', content: `对话内容：\n${text}` }],
+      { systemPrompt: DIRECTIONS_SYSTEM_PROMPT }
+    );
+
+    const jsonMatch = reply.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const directions = JSON.parse(jsonMatch[0]);
+      return res.json({ directions });
+    }
+    return res.json({ directions: [], error: 'AI 未能返回有效结果' });
+  } catch (err) {
+    return res.status(502).json({
+      directions: [],
+      error: '提取失败：' + (err && err.message ? err.message : '未知错误')
+    });
+  }
+});
+
 /* 学习计划 · 家长确认页「输入即调整」：基于当前计划 + 家长要求，由大模型重新安排并返回 JSON */
 app.post('/api/plan/adjust', async (req, res) => {
   const plan = (req.body?.plan || '').trim();
