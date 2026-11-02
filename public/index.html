@@ -402,7 +402,13 @@ function loadPlanState(){
   }catch(e){ return null; }
 }
 function savePlanState(tasks){
-  try{ localStorage.setItem('xm_plan_tasks', JSON.stringify(tasks)); }catch(e){}
+  try{
+    localStorage.setItem('xm_plan_tasks', JSON.stringify(tasks));
+    localStorage.setItem('xm_plan_tasks_version', String(getProfileVersion()));
+  }catch(e){}
+}
+function getPlanTasksVersion(){
+  try{ return Number(localStorage.getItem('xm_plan_tasks_version') || 0); }catch(e){ return 0; }
 }
 
 /* ---------- AI 方向与计划内容持久化（保证刷新后内容稳定） ---------- */
@@ -1925,7 +1931,9 @@ function clampStudyTasks(tasks){
 
 function planTasks(){
   let raw;
-  if(aiTasks && aiTasks.length){
+  const tasksStale = aiTasks && aiTasks.length &&
+    getPlanTasksVersion() !== getProfileVersion();
+  if(aiTasks && aiTasks.length && !tasksStale){
     raw = aiTasks.map(t => ({
       name: t.name || '学习任务',
       icon: t.icon || '📘',
