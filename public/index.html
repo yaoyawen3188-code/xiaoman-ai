@@ -1965,7 +1965,7 @@ function planTasks(){
     const text = aiPlan || '';
     const bookMatch = text.match(/《([^》]+)》/);
     const book = bookMatch ? '《' + bookMatch[1].trim() + '》' : defaultBook();
-    const dirs = getNormalizedDirs();
+    let dirs = getNormalizedDirs();
     // 过滤掉家长明确去掉的方向
     if(aiRemovedDirs && aiRemovedDirs.length){
       const removedSet = new Set(aiRemovedDirs);
