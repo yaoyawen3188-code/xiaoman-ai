@@ -721,6 +721,7 @@ function render(){
 
 async function sendText(input){
   let v = input.value.trim();
+  const originalV = v;  // 保存原始输入，后续判断是否需要从 AI 回复中提取书名
   if(!v || streaming) return;
   const chat = document.querySelector('.chat');
   if(!chat) return;
@@ -838,6 +839,16 @@ async function sendText(input){
       const pm = loadProfileChat();
       pm.push({ role:'assistant', content: full || aiContent.textContent });
       saveProfileChat(pm);
+    }
+    // 家长要求推荐/替换书单时，从本轮 AI 回复中提取新书名并更新书单
+    if(stack[stack.length-1]==='profile' && BOOK_ADD_RE.test(originalV) && full){
+      const newTitles = extractBookTitles(full);
+      if(newTitles.length){
+        const shouldReplace = /替代|替换|覆盖|换成|清空|更换|改成|改为|全换/.test(originalV);
+        if(addAiBooks(removed, shouldReplace, full)){
+          bookChanged = true;
+        }
+      }
     }
   } catch(err){
     aiContent.textContent = '⚠️ AI 服务暂时无法连接，请稍后重试或检查后端是否已部署。';
@@ -1401,10 +1412,10 @@ function extractBookTitles(text){
   return Array.from(set);
 }
 
-function addAiBooks(excludeTitles, replaceAll){
-  // 从整个伴学对话历史中搜索书名，不只是最后一条 AI 回复
+function addAiBooks(excludeTitles, replaceAll, aiReplyText){
+  // 如果传入了本轮 AI 回复文本，优先用它提取书名；否则从整个伴学对话历史中搜索
   const pm = loadProfileChat();
-  const aiReplies = pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
+  const aiReplies = aiReplyText || pm.filter(m => m.role === 'assistant').map(m => m.content).join('\n');
   const titles = extractBookTitles(aiReplies);
   if(!titles.length){
     toast('AI 回复里没有识别到《书名》。可到「兴趣书单」页用「＋添加书籍」手动添加。');
